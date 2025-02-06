@@ -6,7 +6,9 @@ import "../TestImports.t.sol";
 // We need to create a shim contract to call the internal functions of RewardPoolLib in order to get
 // foundry to generate the coverage report correctly
 contract RewardCurveTestShim {
-    function currentMultiplier(CurveParams memory params) external view returns (uint256 multiplier) {
+    function currentMultiplier(
+        CurveParams memory params
+    ) external view returns (uint256 multiplier) {
         return RewardCurveLib.currentMultiplier(params);
     }
 
@@ -18,7 +20,14 @@ contract RewardCurveLibTest is BaseTest {
 
     // Call all methods iva RewardPoolLib.method so the coverage tool can track them
     function defaults() internal pure returns (CurveParams memory) {
-        return CurveParams({numPeriods: 6, periodSeconds: 86_400, startTimestamp: 0, minMultiplier: 0, formulaBase: 2});
+        return
+            CurveParams({
+                numPeriods: 6,
+                periodSeconds: 86_400,
+                startTimestamp: 0,
+                minMultiplier: 0,
+                formulaBase: 2
+            });
     }
 
     /// Curve Tests ///
@@ -80,7 +89,10 @@ contract RewardCurveLibTest is BaseTest {
         uint256 start = block.timestamp;
         for (uint256 i = 0; i <= params.numPeriods; i++) {
             vm.warp(start + (params.periodSeconds * i) + 1);
-            assertEq(shim.currentMultiplier(params), (2 ** (params.numPeriods - i)));
+            assertEq(
+                shim.currentMultiplier(params),
+                (2 ** (params.numPeriods - i))
+            );
         }
         vm.warp(start + (params.periodSeconds * (params.numPeriods + 1)) + 1);
         assertEq(shim.currentMultiplier(params), params.minMultiplier);
