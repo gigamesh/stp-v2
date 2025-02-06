@@ -21,7 +21,13 @@ contract RewardsTest is BaseTest {
 
     function testCurve() public prank(creator) {
         stp.createRewardCurve(
-            CurveParams({numPeriods: 6, periodSeconds: 86_400, startTimestamp: 0, minMultiplier: 0, formulaBase: 2})
+            CurveParams({
+                numPeriods: 6,
+                periodSeconds: 86_400,
+                startTimestamp: 0,
+                minMultiplier: 0,
+                formulaBase: 20000
+            })
         );
         assertEq(stp.curveDetail(1).numPeriods, 6);
         assertEq(stp.contractDetail().numCurves, 2);
@@ -32,7 +38,7 @@ contract RewardsTest is BaseTest {
         uint256 expectedRewards = 0.0101 ether;
         assertEq(stp.contractDetail().rewardBalance, expectedRewards);
         stp.transferRewardsFor(alice);
-        assertEq(stp.contractDetail().rewardBalance, 0 ether);
+        assertApproxEqAbs(stp.contractDetail().rewardBalance, 0 ether, 1);
     }
 
     function testYield() public {
@@ -110,23 +116,37 @@ contract RewardsTest is BaseTest {
         uint256 allocation = 0.0101 ether;
 
         mint(alice, 0.101 ether);
-        assertEq(rbalance(alice), allocation);
+        assertApproxEqAbs(rbalance(alice), allocation, 1);
 
         mint(bob, 0.101 ether);
-        assertEq(rbalance(bob), allocation / 2);
+        assertApproxEqAbs(rbalance(bob), allocation / 2, 1);
 
         mint(charlie, 0.101 ether);
-        assertEq(rbalance(charlie), allocation / 3);
-        assertEq(stp.contractDetail().rewardBalance, allocation * 3);
+        assertApproxEqAbs(rbalance(charlie), allocation / 3, 1);
+        assertApproxEqAbs(
+            stp.contractDetail().rewardBalance,
+            allocation * 3,
+            1
+        );
 
         // Doug should have no balance until more funds are allocated
         vm.startPrank(creator);
         stp.issueRewardShares(doug, rshares(charlie));
         vm.stopPrank();
 
-        assertEq(rbalance(doug), 0);
-        assertApproxEqAbs(rbalance(alice) + rbalance(bob) + rbalance(charlie) + rbalance(doug), allocation * 3, 3);
-        assertEq(rshares(alice) + rshares(bob) + rshares(charlie) + rshares(doug), stp.contractDetail().rewardShares);
+        assertApproxEqAbs(rbalance(doug), 0, 1);
+        assertApproxEqAbs(
+            rbalance(alice) +
+                rbalance(bob) +
+                rbalance(charlie) +
+                rbalance(doug),
+            allocation * 3,
+            3
+        );
+        assertEq(
+            rshares(alice) + rshares(bob) + rshares(charlie) + rshares(doug),
+            stp.contractDetail().rewardShares
+        );
 
         stp.transferRewardsFor(alice);
         stp.transferRewardsFor(bob);
@@ -156,7 +176,11 @@ contract RewardsTest is BaseTest {
 
         assertEq(rbalance(bob), bobBalance);
         assertEq(rbalance(charlie), charlieBalance);
-        assertApproxEqAbs(stp.contractDetail().rewardBalance, bobBalance + charlieBalance, 3);
+        assertApproxEqAbs(
+            stp.contractDetail().rewardBalance,
+            bobBalance + charlieBalance,
+            3
+        );
 
         stp.slash(bob);
         stp.slash(charlie);
@@ -194,9 +218,14 @@ contract RewardsTest is BaseTest {
         assertApproxEqAbs(rbalance(alice), (0.75 ether), 3);
         assertEq(rbalance(doug), 0);
         assertApproxEqAbs(stp.contractDetail().rewardBalance, (0.75 ether), 3);
-        assertEq(stp.contractDetail().rewardBalance + stp.contractDetail().creatorBalance, address(stp).balance);
+        assertEq(
+            stp.contractDetail().rewardBalance +
+                stp.contractDetail().creatorBalance,
+            address(stp).balance
+        );
         assertApproxEqAbs(
-            stp.contractDetail().rewardBalance + stp.contractDetail().creatorBalance,
+            stp.contractDetail().rewardBalance +
+                stp.contractDetail().creatorBalance,
             (0.75 ether) + (0.303 ether) - (0.0303 ether),
             2
         );

@@ -16,13 +16,13 @@ struct CurveParams {
     /// @dev the number of periods for which rewards are paid (acts as the exponent)
     uint8 numPeriods;
     /// @dev The base of the exponential formula for reward calculations
-    uint8 formulaBase;
+    uint16 formulaBase;
     /// @dev the period duration in seconds
     uint48 periodSeconds;
     /// @dev the start timestamp for rewards
     uint48 startTimestamp;
     /// @dev the minimum multiplier for rewards
-    uint8 minMultiplier;
+    uint16 minMultiplier;
 }
 
 /// @dev The slashing parameters for the reward pool. Slashing is a mechanism to to burn shares for a

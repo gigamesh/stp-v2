@@ -26,9 +26,7 @@ import {SubscriptionLib} from "src/libraries/SubscriptionLib.sol";
 import {TierLib} from "src/libraries/TierLib.sol";
 import "src/types/Constants.sol";
 import {DeployParams, FeeScheduleView} from "src/types/Factory.sol";
-import {
-    FeeParams, Gate, GateType, InitParams, MintParams, Subscription, Subscription, Tier
-} from "src/types/Index.sol";
+import {FeeParams, Gate, GateType, InitParams, MintParams, Subscription, Subscription, Tier} from "src/types/Index.sol";
 import {CurveParams, Holder, RewardParams} from "src/types/Rewards.sol";
 import {SubscriberView} from "src/types/Views.sol";
 
@@ -46,16 +44,27 @@ contract TestERC1155Token is ERC1155 {
 
 // Test token which charges 50% fee on transfer
 contract TestFeeToken is ERC20 {
-    constructor(string memory name, string memory symbol, uint256 initialSupply) ERC20(name, symbol) {
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint256 initialSupply
+    ) ERC20(name, symbol) {
         _mint(msg.sender, initialSupply);
     }
 
-    function transfer(address to, uint256 amount) public virtual override returns (bool) {
+    function transfer(
+        address to,
+        uint256 amount
+    ) public virtual override returns (bool) {
         super.transfer(to, amount >> 1);
         return true;
     }
 
-    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) public virtual override returns (bool) {
         super.transferFrom(from, to, amount >> 1);
         return true;
     }
@@ -68,7 +77,11 @@ contract TestERC20Token is ERC20 {
     bool private revertOnTransfer = false;
     bool private falseReturn = false;
 
-    constructor(string memory name, string memory symbol, uint8 numDecimals) ERC20(name, symbol) {
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint8 numDecimals
+    ) ERC20(name, symbol) {
         _decimals = numDecimals;
         _mint(msg.sender, 1_000_000 * (10 ** uint256(numDecimals)));
     }
@@ -77,7 +90,10 @@ contract TestERC20Token is ERC20 {
         return _decimals;
     }
 
-    function transfer(address to, uint256 amount) public virtual override returns (bool) {
+    function transfer(
+        address to,
+        uint256 amount
+    ) public virtual override returns (bool) {
         if (revertOnTransfer) revert("TestERC20Token: transfer failed");
         if (falseReturn) return false;
         return super.transfer(to, amount);
@@ -122,44 +138,59 @@ abstract contract BaseTest is Test {
     address internal charlie = 0xb4C79Dab8F259C7AEe6e5b2Aa729821864227e7A;
     address internal doug = 0xB4c79dAb8f259c7aee6e5b2aa729821864227E7b;
 
-    Tier internal tierParams = Tier({
-        // periodDurationSeconds: 2,
-        periodDurationSeconds: 30 days,
-        maxSupply: 1000,
-        maxCommitmentSeconds: 0,
-        rewardCurveId: 0,
-        rewardBasisPoints: 0,
-        paused: false,
-        transferrable: true,
-        initialMintPrice: 0,
-        // pricePerPeriod: 4,
-        pricePerPeriod: 0.001 ether,
-        startTimestamp: 0,
-        endTimestamp: 0,
-        gate: Gate({gateType: GateType.NONE, contractAddress: address(0), componentId: 0, balanceMin: 0})
-    });
+    Tier internal tierParams =
+        Tier({
+            // periodDurationSeconds: 2,
+            periodDurationSeconds: 30 days,
+            maxSupply: 1000,
+            maxCommitmentSeconds: 0,
+            rewardCurveId: 0,
+            rewardBasisPoints: 0,
+            paused: false,
+            transferrable: true,
+            initialMintPrice: 0,
+            // pricePerPeriod: 4,
+            pricePerPeriod: 0.001 ether,
+            startTimestamp: 0,
+            endTimestamp: 0,
+            gate: Gate({
+                gateType: GateType.NONE,
+                contractAddress: address(0),
+                componentId: 0,
+                balanceMin: 0
+            })
+        });
 
-    FeeParams internal feeParams = FeeParams({
-        protocolRecipient: address(0),
-        protocolBps: 0,
-        clientRecipient: address(0),
-        clientBps: 0,
-        clientReferralBps: 0
-    });
+    FeeParams internal feeParams =
+        FeeParams({
+            protocolRecipient: address(0),
+            protocolBps: 0,
+            clientRecipient: address(0),
+            clientBps: 0,
+            clientReferralBps: 0
+        });
 
-    RewardParams internal rewardParams = RewardParams({slashGracePeriod: 7 days, slashable: true});
+    RewardParams internal rewardParams =
+        RewardParams({slashGracePeriod: 7 days, slashable: true});
 
     CurveParams internal curveParams =
-        CurveParams({numPeriods: 6, periodSeconds: 86_400, startTimestamp: 0, minMultiplier: 0, formulaBase: 2});
+        CurveParams({
+            numPeriods: 6,
+            periodSeconds: 86_400,
+            startTimestamp: 0,
+            minMultiplier: 0,
+            formulaBase: 20000
+        });
 
-    InitParams internal initParams = InitParams({
-        name: "Meow Sub",
-        symbol: "MEOW",
-        contractUri: "curi",
-        owner: creator,
-        currencyAddress: address(0),
-        globalSupplyCap: 1000
-    });
+    InitParams internal initParams =
+        InitParams({
+            name: "Meow Sub",
+            symbol: "MEOW",
+            contractUri: "curi",
+            owner: creator,
+            currencyAddress: address(0),
+            globalSupplyCap: 1000
+        });
 
     STPV2 internal stp;
 
@@ -167,10 +198,20 @@ abstract contract BaseTest is Test {
         stp = new STPV2();
         vm.store(
             address(stp),
-            bytes32(uint256(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffbf601132)),
+            bytes32(
+                uint256(
+                    0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffbf601132
+                )
+            ),
             bytes32(0)
         );
-        stp.initialize(initParams, tierParams, rewardParams, curveParams, feeParams);
+        stp.initialize(
+            initParams,
+            tierParams,
+            rewardParams,
+            curveParams,
+            feeParams
+        );
         return stp;
     }
 
@@ -189,7 +230,10 @@ abstract contract BaseTest is Test {
         return subscribers;
     }
 
-    function list(address account, address account2) internal pure returns (address[] memory) {
+    function list(
+        address account,
+        address account2
+    ) internal pure returns (address[] memory) {
         address[] memory subscribers = new address[](2);
         subscribers[0] = account;
         subscribers[1] = account2;
@@ -214,7 +258,11 @@ abstract contract BaseTest is Test {
         return reinitStp();
     }
 
-    function createETHSub(uint256 minPurchase, uint16 feeBps, uint16 bips) public virtual returns (STPV2 sub) {
+    function createETHSub(
+        uint256 minPurchase,
+        uint16 feeBps,
+        uint16 bips
+    ) public virtual returns (STPV2 sub) {
         tierParams.periodDurationSeconds = uint32(minPurchase);
         tierParams.pricePerPeriod = minPurchase * 2;
         tierParams.rewardBasisPoints = bips;
@@ -224,7 +272,14 @@ abstract contract BaseTest is Test {
     }
 
     function defaultCurveParams() internal pure returns (CurveParams memory) {
-        return CurveParams({numPeriods: 6, periodSeconds: 2, startTimestamp: 0, minMultiplier: 0, formulaBase: 2});
+        return
+            CurveParams({
+                numPeriods: 6,
+                periodSeconds: 2,
+                startTimestamp: 0,
+                minMultiplier: 0,
+                formulaBase: 20000
+            });
     }
 
     function testIgnore() internal {}

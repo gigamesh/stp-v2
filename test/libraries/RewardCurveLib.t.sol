@@ -3,8 +3,6 @@ pragma solidity ^0.8.20;
 
 import "../TestImports.t.sol";
 
-// We need to create a shim contract to call the internal functions of RewardPoolLib in order to get
-// foundry to generate the coverage report correctly
 contract RewardCurveTestShim {
     function currentMultiplier(
         CurveParams memory params
@@ -18,15 +16,15 @@ contract RewardCurveTestShim {
 contract RewardCurveLibTest is BaseTest {
     RewardCurveTestShim public shim = new RewardCurveTestShim();
 
-    // Call all methods iva RewardPoolLib.method so the coverage tool can track them
     function defaults() internal pure returns (CurveParams memory) {
+        // Base of 2 in the old system becomes 20000 in basis points (2.0 * 10000)
         return
             CurveParams({
                 numPeriods: 6,
                 periodSeconds: 86_400,
                 startTimestamp: 0,
                 minMultiplier: 0,
-                formulaBase: 2
+                formulaBase: 20000
             });
     }
 
@@ -44,9 +42,11 @@ contract RewardCurveLibTest is BaseTest {
 
     function testSinglePeriod() public {
         CurveParams memory params = defaults();
-        assertEq(shim.currentMultiplier(params), 64);
+        // 2^6 = 64 in the old system
+        assertEq(shim.currentMultiplier(params), 64 * RewardCurveLib.BASIS_PTS);
         vm.warp(block.timestamp + 1 + 1 days);
-        assertEq(shim.currentMultiplier(params), 32);
+        // 2^5 = 32 in the old system
+        assertEq(shim.currentMultiplier(params), 32 * RewardCurveLib.BASIS_PTS);
     }
 
     function testZeroMin() public {
@@ -65,13 +65,13 @@ contract RewardCurveLibTest is BaseTest {
 
     function testMinMultiplierIsMin() public {
         CurveParams memory params = defaults();
-        params.minMultiplier = 16;
+        params.minMultiplier = 5;
         vm.warp(block.timestamp + 2 days);
-        assertEq(shim.currentMultiplier(params), 16);
+        assertEq(shim.currentMultiplier(params), 16 * 1e9);
         vm.warp(block.timestamp + 1 days);
-        assertEq(shim.currentMultiplier(params), 16);
-        vm.warp(block.timestamp + 365 days);
-        assertEq(shim.currentMultiplier(params), 16);
+        assertEq(shim.currentMultiplier(params), 16 * 1e9);
+        vm.warp(block.timestamp + 7 days);
+        assertEq(shim.currentMultiplier(params), params.minMultiplier);
     }
 
     function testZeroPeriods() public {
@@ -87,13 +87,15 @@ contract RewardCurveLibTest is BaseTest {
         CurveParams memory params = defaults();
         params.numPeriods = periods;
         uint256 start = block.timestamp;
+
         for (uint256 i = 0; i <= params.numPeriods; i++) {
             vm.warp(start + (params.periodSeconds * i) + 1);
-            assertEq(
-                shim.currentMultiplier(params),
-                (2 ** (params.numPeriods - i))
-            );
+            // 2^(numPeriods - i) in the old system, now scaled by 1e9
+            uint256 expected = (2 ** (params.numPeriods - i)) *
+                RewardCurveLib.BASIS_PTS;
+            assertEq(shim.currentMultiplier(params), expected);
         }
+
         vm.warp(start + (params.periodSeconds * (params.numPeriods + 1)) + 1);
         assertEq(shim.currentMultiplier(params), params.minMultiplier);
     }

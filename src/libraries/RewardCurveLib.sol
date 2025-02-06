@@ -11,6 +11,8 @@ library RewardCurveLib {
     /// @dev The scaling factor used for percentage calculations (100% = 1e18)
     uint256 constant WAD = 1e18;
 
+    uint256 constant BASIS_PTS = 1e4;
+
     /// @dev Calculate the current multiplier for the curve
     /// @dev Formula: base^(numPeriods - periods) where base is formulaBase/10000
     /// @dev Example: For 1% decay per period, use formulaBase = 9900 (0.99)
@@ -23,13 +25,13 @@ library RewardCurveLib {
         if (periods > curve.numPeriods) return curve.minMultiplier;
 
         // Convert basis points to WAD format
-        uint256 base = (uint256(curve.formulaBase) * WAD) / 10000;
+        uint256 base = (uint256(curve.formulaBase) * WAD) / BASIS_PTS;
 
         // Calculate power: base^(numPeriods - periods)
         multiplier = base.rpow(curve.numPeriods - periods, WAD);
 
-        // Scale back down from WAD
-        multiplier = multiplier / 1e9;
+        // Scale back down to basis points
+        multiplier = (multiplier * BASIS_PTS) / WAD;
 
         if (multiplier < curve.minMultiplier) multiplier = curve.minMultiplier;
     }
