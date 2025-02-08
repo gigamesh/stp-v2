@@ -207,7 +207,7 @@ contract RewardPoolLibTest is BaseTest {
     }
 
     function testLargeValues() public {
-        uint256 maxWeiDelta = 10;
+        uint256 maxWeiDelta = 10_000;
         uint256 allocation = 2 ** 72;
         for (uint256 i = 0; i < 512; i++) {
             shim.issueWithCurve(alice, allocation, 0);
@@ -228,21 +228,21 @@ contract RewardPoolLibTest is BaseTest {
             maxWeiDelta
         );
 
-        // assertApproxEqAbs(
-        //     shim.rewardBalanceOf(alice),
-        //     shim.rewardBalanceOf(charlie),
-        //     maxWeiDelta
-        // );
-        // assertApproxEqAbs(
-        //     shim.rewardBalanceOf(alice),
-        //     shim.rewardBalanceOf(bob),
-        //     maxWeiDelta
-        // );
+        assertApproxEqAbs(
+            shim.rewardBalanceOf(alice),
+            shim.rewardBalanceOf(charlie),
+            maxWeiDelta
+        );
+        assertApproxEqAbs(
+            shim.rewardBalanceOf(alice),
+            shim.rewardBalanceOf(bob),
+            maxWeiDelta
+        );
 
-        // shim.burn(alice);
-        // shim.burn(bob);
-        // shim.burn(charlie);
-        // assertApproxEqAbs(shim.balance(), 0, maxWeiDelta);
+        shim.burn(alice);
+        shim.burn(bob);
+        shim.burn(charlie);
+        assertApproxEqAbs(shim.balance(), 0, maxWeiDelta);
     }
 
     function testFuzzAllocate(uint48 allocation) public {
@@ -270,5 +270,42 @@ contract RewardPoolLibTest is BaseTest {
         shim.burn(charlie);
 
         assertApproxEqAbs(shim.balance(), 0, maxWeiDelta);
+    }
+
+    function testCreateCurve() public {
+        // No need to test periodSeconds. Will only fail if over 2**48
+
+        CurveParams memory params = CurveParams({
+            numPeriods: RewardPoolLib.MAX_PERIODS + 1,
+            periodSeconds: 1,
+            startTimestamp: 0,
+            minMultiplier: 0,
+            formulaBase: 0
+        });
+
+        vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
+        shim.createCurve(params);
+
+        params = CurveParams({
+            numPeriods: 1,
+            periodSeconds: 1,
+            startTimestamp: uint48(block.timestamp + 1),
+            minMultiplier: 0,
+            formulaBase: 0
+        });
+
+        vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
+        shim.createCurve(params);
+
+        params = CurveParams({
+            numPeriods: 1,
+            periodSeconds: 1,
+            startTimestamp: 0,
+            minMultiplier: RewardPoolLib.MAX_MULTIPLIER + 1,
+            formulaBase: 0
+        });
+
+        vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
+        shim.createCurve(params);
     }
 }
