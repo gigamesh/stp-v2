@@ -69,8 +69,6 @@ contract RewardCurveLibTest is BaseTest {
         CurveParams memory params = defaults();
         params.minMultiplier = 42;
 
-        uint256 initialMultiplier = shim.currentMultiplier(params);
-
         vm.warp(block.timestamp + 2 days);
         assertEq(shim.currentMultiplier(params), 2500); // 50% decay twice
         vm.warp(block.timestamp + 7 days);

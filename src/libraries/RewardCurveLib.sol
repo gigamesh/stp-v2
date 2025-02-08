@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.25;
-
-import {console} from "@forge/console.sol";
-
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {CurveParams} from "src/types/Rewards.sol";
 
@@ -22,10 +19,9 @@ library RewardCurveLib {
     function currentMultiplier(
         CurveParams memory curve
     ) internal view returns (uint256 multiplier) {
-        uint256 periods = surpassedPeriods(curve);
+        if (curve.numPeriods == 0) return curve.minMultiplier; // Handle a non-existant or constant curve
 
-        console.log("periods", periods);
-        console.log("numPeriods", curve.numPeriods);
+        uint256 periods = surpassedPeriods(curve);
 
         if (periods > curve.numPeriods) return curve.minMultiplier;
 
@@ -40,8 +36,6 @@ library RewardCurveLib {
 
         // Convert to basis points
         multiplier = (multiplier * BASIS_POINTS) / WAD;
-
-        console.log("multiplier", multiplier);
 
         if (multiplier < curve.minMultiplier) {
             return curve.minMultiplier;

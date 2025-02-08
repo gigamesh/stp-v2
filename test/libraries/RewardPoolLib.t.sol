@@ -179,6 +179,8 @@ contract RewardPoolLibTest is BaseTest {
     function testLargeValues() public {
         uint256 maxWeiDelta = 10_000;
         uint256 allocation = 2 ** 72;
+        uint256 multiplier = RewardCurveLib.currentMultiplier(shim.curve(0));
+
         for (uint256 i = 0; i < 512; i++) {
             shim.issueWithCurve(alice, allocation, 0);
             shim.issueWithCurve(bob, allocation, 0);
@@ -186,10 +188,7 @@ contract RewardPoolLibTest is BaseTest {
             shim.allocate(allocation);
         }
 
-        assertEq(
-            shim.state().totalShares,
-            allocation * 512 * 3 * 64 * RewardCurveLib.BASIS_POINTS
-        );
+        assertEq(shim.state().totalShares, allocation * 512 * 3 * multiplier);
         assertApproxEqAbs(
             shim.balance(),
             shim.rewardBalanceOf(alice) +
