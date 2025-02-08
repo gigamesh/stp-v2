@@ -26,7 +26,7 @@ contract RewardsTest is BaseTest {
                 periodSeconds: 86_400,
                 startTimestamp: 0,
                 minMultiplier: 0,
-                formulaBase: 20000
+                decayRate: 50
             })
         );
         assertEq(stp.curveDetail(1).numPeriods, 6);

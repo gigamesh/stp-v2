@@ -179,7 +179,7 @@ abstract contract BaseTest is Test {
             periodSeconds: 86_400,
             startTimestamp: 0,
             minMultiplier: 0,
-            formulaBase: 20000
+            decayRate: 50
         });
 
     InitParams internal initParams =
@@ -278,7 +278,7 @@ abstract contract BaseTest is Test {
                 periodSeconds: 2,
                 startTimestamp: 0,
                 minMultiplier: 0,
-                formulaBase: 20000
+                decayRate: 50
             });
     }
 

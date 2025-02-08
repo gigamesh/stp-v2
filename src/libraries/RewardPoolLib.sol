@@ -123,7 +123,7 @@ library RewardPoolLib {
             curve.minMultiplier > MAX_MULTIPLIER ||
             curve.numPeriods > MAX_PERIODS
 
-            // TODO: add a check for formulaBase
+            // TODO: add a check for decayRate
         ) revert InvalidCurve();
 
         // curve.validate();

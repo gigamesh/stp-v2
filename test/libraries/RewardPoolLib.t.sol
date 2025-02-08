@@ -23,7 +23,7 @@ contract RewardTestShim {
                 periodSeconds: 86_400,
                 startTimestamp: uint48(block.timestamp),
                 minMultiplier: 0,
-                formulaBase: 20000
+                decayRate: 50
             })
         );
     }
@@ -93,38 +93,8 @@ contract RewardPoolLibTest is BaseTest {
                 periodSeconds: 86_400,
                 startTimestamp: 0,
                 minMultiplier: 0,
-                formulaBase: 20000
+                decayRate: 50
             });
-    }
-
-    function testCurve() public {
-        CurveParams memory curve = defaultCurve();
-        vm.expectEmit(true, true, false, true, address(shim));
-        emit RewardPoolLib.CurveCreated(1);
-        shim.createCurve(curve);
-
-        curve = defaultCurve();
-        curve.numPeriods = 37;
-        curve.formulaBase = 20000;
-        vm.expectRevert(
-            abi.encodeWithSelector(RewardPoolLib.InvalidCurve.selector)
-        );
-        shim.createCurve(curve);
-
-        curve = defaultCurve();
-        curve.numPeriods = 0;
-        curve.minMultiplier = 0;
-        vm.expectRevert(
-            abi.encodeWithSelector(RewardPoolLib.InvalidCurve.selector)
-        );
-        shim.createCurve(curve);
-
-        curve = defaultCurve();
-        curve.startTimestamp = uint48(block.timestamp + 1000);
-        vm.expectRevert(
-            abi.encodeWithSelector(RewardPoolLib.InvalidCurve.selector)
-        );
-        shim.createCurve(curve);
     }
 
     function testIssuance() public {
@@ -218,7 +188,7 @@ contract RewardPoolLibTest is BaseTest {
 
         assertEq(
             shim.state().totalShares,
-            allocation * 512 * 3 * 64 * RewardCurveLib.BASIS_PTS
+            allocation * 512 * 3 * 64 * RewardCurveLib.BASIS_POINTS
         );
         assertApproxEqAbs(
             shim.balance(),
@@ -280,7 +250,7 @@ contract RewardPoolLibTest is BaseTest {
             periodSeconds: 1,
             startTimestamp: 0,
             minMultiplier: 0,
-            formulaBase: 0
+            decayRate: 0
         });
 
         vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
@@ -291,7 +261,7 @@ contract RewardPoolLibTest is BaseTest {
             periodSeconds: 1,
             startTimestamp: uint48(block.timestamp + 1),
             minMultiplier: 0,
-            formulaBase: 0
+            decayRate: 0
         });
 
         vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
@@ -302,7 +272,7 @@ contract RewardPoolLibTest is BaseTest {
             periodSeconds: 1,
             startTimestamp: 0,
             minMultiplier: RewardPoolLib.MAX_MULTIPLIER + 1,
-            formulaBase: 0
+            decayRate: 0
         });
 
         vm.expectRevert(RewardPoolLib.InvalidCurve.selector);

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import "../TestImports.t.sol";
-
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
 contract RewardCurveTestShim {
@@ -21,18 +20,16 @@ contract RewardCurveLibTest is BaseTest {
     RewardCurveTestShim public shim = new RewardCurveTestShim();
 
     function defaults() internal pure returns (CurveParams memory) {
-        // Base of 2 in the old system becomes 20000 in basis points (2.0 * 10000)
+        // 50% decay per period (halves each period)
         return
             CurveParams({
                 numPeriods: 6,
+                decayRate: 50, // 50% decay per period
                 periodSeconds: 86_400,
                 startTimestamp: 0,
-                minMultiplier: 0,
-                formulaBase: 20000
+                minMultiplier: 0
             });
     }
-
-    /// Curve Tests ///
 
     function testNoDecay() public {
         CurveParams memory params = defaults();
@@ -46,11 +43,12 @@ contract RewardCurveLibTest is BaseTest {
 
     function testSinglePeriod() public {
         CurveParams memory params = defaults();
-        // 2^6 = 64 in the old system
-        assertEq(shim.currentMultiplier(params), 64 * RewardCurveLib.BASIS_PTS);
+        // Initial: Should be 100% (10000 basis points)
+        assertEq(shim.currentMultiplier(params), 10000);
+
+        // After 1 period: Should decay by 50% (5000 basis points)
         vm.warp(block.timestamp + 1 + 1 days);
-        // 2^5 = 32 in the old system
-        assertEq(shim.currentMultiplier(params), 32 * RewardCurveLib.BASIS_PTS);
+        assertEq(shim.currentMultiplier(params), 5000);
     }
 
     function testZeroMin() public {
@@ -69,41 +67,35 @@ contract RewardCurveLibTest is BaseTest {
 
     function testMinMultiplierIsMin() public {
         CurveParams memory params = defaults();
-        params.minMultiplier = 42069;
+        params.minMultiplier = 42;
+
+        uint256 initialMultiplier = shim.currentMultiplier(params);
+
         vm.warp(block.timestamp + 2 days);
-        assertEq(shim.currentMultiplier(params), 16_0000);
+        assertEq(shim.currentMultiplier(params), 2500); // 50% decay twice
         vm.warp(block.timestamp + 7 days);
         assertEq(shim.currentMultiplier(params), params.minMultiplier);
-        vm.warp(block.timestamp + 100 days);
-        assertEq(shim.currentMultiplier(params), params.minMultiplier);
     }
 
-    function testZeroPeriods() public {
-        CurveParams memory params = defaults();
-        params.numPeriods = 0;
-        assertEq(shim.currentMultiplier(params), 0);
-    }
-
-    function testFuzzDecay(uint8 periods) public {
-        vm.assume(periods > 0);
-        vm.assume(periods <= 64);
+    function testFuzzDecay(uint8 numPeriods) public {
+        vm.assume(numPeriods > 0);
+        vm.assume(numPeriods <= 64);
 
         CurveParams memory params = defaults();
-        params.numPeriods = periods;
+        params.numPeriods = numPeriods;
         uint256 start = block.timestamp;
 
-        // Convert the base (2.0) to proper basis points format once
-        uint256 base = (params.formulaBase * RewardCurveLib.WAD) /
-            RewardCurveLib.BASIS_PTS; // 2.0 in WAD format
+        // Calculate base rate for decay
+        uint256 baseRate = ((100 - params.decayRate) * RewardCurveLib.WAD) /
+            100;
 
-        for (uint256 i = 0; i <= params.numPeriods; i++) {
-            vm.warp(start + (params.periodSeconds * i) + 1);
+        for (uint256 period = 0; period < params.numPeriods; period++) {
+            vm.warp(start + (params.periodSeconds * period));
 
-            // Calculate expected value using the same fixed-point math as the library
-            uint256 remainingPeriods = params.numPeriods - i;
-            uint256 expected = base.rpow(remainingPeriods, RewardCurveLib.WAD);
+            // Calculate expected value
+            uint256 expected = baseRate.rpow(period, RewardCurveLib.WAD);
             expected =
-                (expected * RewardCurveLib.BASIS_PTS) /
+                (expected * RewardCurveLib.BASIS_POINTS) /
                 RewardCurveLib.WAD;
 
             assertEq(shim.currentMultiplier(params), expected);
@@ -113,85 +105,16 @@ contract RewardCurveLibTest is BaseTest {
         assertEq(shim.currentMultiplier(params), params.minMultiplier);
     }
 
-    function testLargePeriodChunking() public {
+    function testDecayRateBoundaries() public {
         CurveParams memory params = defaults();
 
-        // TODO: test with larger values
-        params.numPeriods = 130;
+        // Test 0% decay
+        params.decayRate = 0;
+        assertEq(shim.currentMultiplier(params), RewardCurveLib.BASIS_POINTS); // Stays at 100%
 
-        uint256 start = block.timestamp;
-        // Test at beginning
-        assertGt(shim.currentMultiplier(params), 0);
-
-        // Test after exactly MAX_CHUNK_SIZE periods
-        vm.warp(start + (params.periodSeconds * RewardCurveLib.MAX_CHUNK_SIZE));
-        uint256 midMultiplier = shim.currentMultiplier(params);
-        assertGt(midMultiplier, params.minMultiplier);
-
-        // Test after all periods
-        vm.warp(start + (params.periodSeconds * (params.numPeriods + 1)));
-        assertEq(shim.currentMultiplier(params), params.minMultiplier);
-    }
-
-    function testVariousFormulaBases() public {
-        CurveParams memory params = defaults();
-        params.numPeriods = 4;
-
-        // Test with 0.5 (5000 basis points)
-        params.formulaBase = 5000;
-        assertEq(shim.currentMultiplier(params), 625); // 0.5^4 * 10000
-
-        // Test with 1.5 (15000 basis points)
-        params.formulaBase = 15000;
-        assertEq(shim.currentMultiplier(params), 50625); // 1.5^4 * 10000
-    }
-
-    function testDifferentPeriodDurations() public {
-        CurveParams memory params = defaults();
-
-        // Test with 1 hour periods
-        params.periodSeconds = 3600;
-        uint256 start = block.timestamp;
-        vm.warp(start + 3600);
-        uint256 hourlyMultiplier = shim.currentMultiplier(params);
-
-        // Reset and test with 1 day periods
-        params.periodSeconds = 86400;
-        vm.warp(start + 86400);
-        uint256 dailyMultiplier = shim.currentMultiplier(params);
-
-        assertEq(hourlyMultiplier, dailyMultiplier);
-    }
-
-    function testFutureStartTimestamp() public {
-        uint256 initBlockTimestamp = block.timestamp;
-        // Need to start by jumping forward because the
-        // contract logic assumes block.timestamp is not zero
-        vm.warp(initBlockTimestamp + 100 days);
-
-        CurveParams memory params = defaults();
-        params.startTimestamp = uint48(block.timestamp + 1 days);
-
-        // Before start
-        assertEq(shim.currentMultiplier(params), 64 * RewardCurveLib.BASIS_PTS);
-
-        // At exact start
-        vm.warp(params.startTimestamp);
-        assertEq(shim.currentMultiplier(params), 64 * RewardCurveLib.BASIS_PTS);
-
-        // After start
-        vm.warp(params.startTimestamp + params.periodSeconds);
-        assertEq(shim.currentMultiplier(params), 32 * RewardCurveLib.BASIS_PTS);
-    }
-
-    function testMinMultiplierBoundary() public {
-        CurveParams memory params = defaults();
-        params.minMultiplier = 10000; // 1.0 in basis points
-
-        // Should never go below minMultiplier
-        vm.warp(
-            block.timestamp + (params.periodSeconds * params.numPeriods * 2)
-        );
-        assertEq(shim.currentMultiplier(params), params.minMultiplier);
+        // Test 100% decay
+        params.decayRate = 100;
+        vm.warp(block.timestamp + params.periodSeconds);
+        assertEq(shim.currentMultiplier(params), 0); // Complete decay
     }
 }

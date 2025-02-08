@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.25;
 
+import {console} from "@forge/console.sol";
+
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {CurveParams} from "src/types/Rewards.sol";
 
-/// @dev Library for reward curve calculations with support for large period values
+/// @dev Library for reward curve calculations using percentage-based decay
 library RewardCurveLib {
     using FixedPointMathLib for uint256;
 
@@ -12,51 +14,46 @@ library RewardCurveLib {
     uint256 constant WAD = 1e18;
 
     /// @dev Basis points scaling (100% = 10000)
-    uint256 constant BASIS_PTS = 1e4;
+    uint256 constant BASIS_POINTS = 1e4;
 
-    /// @dev Maximum chunk size for processing large periods
-    uint256 constant MAX_CHUNK_SIZE = 10;
-
-    /// @dev Calculate the current multiplier for the curve using chunked calculations
-    /// @dev Formula: base^(numPeriods - periods) where base is formulaBase/10000
-    /// @dev Example: For 1% decay per period, use formulaBase = 9900 (0.99)
+    /// @dev Calculate the current multiplier for the curve
+    /// @dev For a decay rate of X%, the multiplier decreases by X% each period
+    /// @dev Example: 50% decay means each period multiplies by 0.5
     function currentMultiplier(
         CurveParams memory curve
     ) internal view returns (uint256 multiplier) {
-        if (curve.numPeriods == 0) return curve.minMultiplier;
-
         uint256 periods = surpassedPeriods(curve);
+
+        console.log("periods", periods);
+        console.log("numPeriods", curve.numPeriods);
+
         if (periods > curve.numPeriods) return curve.minMultiplier;
 
-        uint256 remainingPeriods = curve.numPeriods - periods;
-        uint256 base = (uint256(curve.formulaBase) * WAD) / BASIS_PTS;
+        // Calculate (1 - decayRate/100) in WAD precision
+        uint256 baseRate = ((100 - curve.decayRate) * WAD) / 100;
+
+        // Start from BASIS_POINTS (100%) and apply decay for elapsed periods
         multiplier = WAD;
-
-        // Scale down after each multiplication to prevent overflow
-        while (remainingPeriods > 0) {
-            uint256 chunkSize = remainingPeriods > MAX_CHUNK_SIZE
-                ? MAX_CHUNK_SIZE
-                : remainingPeriods;
-
-            // Scale down immediately after the power operation
-            uint256 chunkResult = base.rpow(chunkSize, WAD);
-            // Scale back to basis points early to prevent overflow
-            multiplier = (multiplier * chunkResult) / WAD;
-
-            remainingPeriods -= chunkSize;
+        if (periods > 0) {
+            multiplier = baseRate.rpow(periods, WAD);
         }
 
-        // Final scaling to basis points
-        multiplier = (multiplier * BASIS_PTS) / WAD;
+        // Convert to basis points
+        multiplier = (multiplier * BASIS_POINTS) / WAD;
 
-        if (multiplier < curve.minMultiplier) multiplier = curve.minMultiplier;
+        console.log("multiplier", multiplier);
+
+        if (multiplier < curve.minMultiplier) {
+            return curve.minMultiplier;
+        }
+
+        return multiplier;
     }
 
     /// @dev Calculate how many periods have passed
     function surpassedPeriods(
         CurveParams memory curve
     ) private view returns (uint256) {
-        // Prevents underflow error
         if (block.timestamp <= curve.startTimestamp) {
             return 0;
         }
