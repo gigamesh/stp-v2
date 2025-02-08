@@ -67,10 +67,6 @@ library RewardPoolLib {
     /// @dev The maximum reward factor (this limits overflow probability)
     uint256 public constant MAX_MULTIPLIER = 2 ** 36;
 
-    /// @dev The maximum number of periods a curve can have
-    // TODO: increase this
-    uint16 public constant MAX_PERIODS = 130;
-
     /////////////////////
     // EVENTS
     /////////////////////
@@ -119,11 +115,9 @@ library RewardPoolLib {
         if (
             (curve.numPeriods == 0 && curve.minMultiplier == 0) ||
             curve.startTimestamp > block.timestamp ||
-            curve.currentMultiplier() > MAX_MULTIPLIER ||
             curve.minMultiplier > MAX_MULTIPLIER ||
-            curve.numPeriods > MAX_PERIODS
-
-            // TODO: add a check for decayRate
+            curve.numPeriods > RewardCurveLib.MAX_PERIODS ||
+            curve.decayRate > 100 // Can't decay more than 100%
         ) revert InvalidCurve();
 
         // curve.validate();

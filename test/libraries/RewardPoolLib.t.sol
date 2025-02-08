@@ -243,9 +243,8 @@ contract RewardPoolLibTest is BaseTest {
 
     function testCreateCurve() public {
         // No need to test periodSeconds. Will only fail if over 2**48
-
         CurveParams memory params = CurveParams({
-            numPeriods: RewardPoolLib.MAX_PERIODS + 1,
+            numPeriods: RewardCurveLib.MAX_PERIODS + 1,
             periodSeconds: 1,
             startTimestamp: 0,
             minMultiplier: 0,
@@ -272,6 +271,17 @@ contract RewardPoolLibTest is BaseTest {
             startTimestamp: 0,
             minMultiplier: RewardPoolLib.MAX_MULTIPLIER + 1,
             decayRate: 0
+        });
+
+        vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
+        shim.createCurve(params);
+
+        params = CurveParams({
+            numPeriods: 1,
+            periodSeconds: 1,
+            startTimestamp: 0,
+            minMultiplier: 0,
+            decayRate: 101
         });
 
         vm.expectRevert(RewardPoolLib.InvalidCurve.selector);

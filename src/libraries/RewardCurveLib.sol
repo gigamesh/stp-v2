@@ -10,8 +10,11 @@ library RewardCurveLib {
     /// @dev The scaling factor used for percentage calculations (100% = 1e18)
     uint256 constant WAD = 1e18;
 
-    /// @dev Basis points scaling (100% = 10000)
-    uint256 constant BASIS_POINTS = 1e4;
+    /// @dev Scales multiplier to effectively act like a fixed-point number with 2 decimal places
+    uint256 constant SCALE_FACTOR = 100;
+
+    /// @dev The maximum number of periods a curve can have (prevents overflow)
+    uint16 public constant MAX_PERIODS = 10_000;
 
     /// @dev Calculate the current multiplier for the curve
     /// @dev For a decay rate of X%, the multiplier decreases by X% each period
@@ -19,7 +22,8 @@ library RewardCurveLib {
     function currentMultiplier(
         CurveParams memory curve
     ) internal view returns (uint256 multiplier) {
-        if (curve.numPeriods == 0) return curve.minMultiplier; // Handle a non-existant or constant curve
+        // Handle a non-existant or constant curve
+        if (curve.numPeriods == 0) return curve.minMultiplier;
 
         uint256 periods = surpassedPeriods(curve);
 
@@ -28,14 +32,14 @@ library RewardCurveLib {
         // Calculate (1 - decayRate/100) in WAD precision
         uint256 baseRate = ((100 - curve.decayRate) * WAD) / 100;
 
-        // Start from BASIS_POINTS (100%) and apply decay for elapsed periods
+        // Start from SCALE_FACTOR (100%) and apply decay for elapsed periods
         multiplier = WAD;
         if (periods > 0) {
             multiplier = baseRate.rpow(periods, WAD);
         }
 
         // Convert to basis points
-        multiplier = (multiplier * BASIS_POINTS) / WAD;
+        multiplier = (multiplier * SCALE_FACTOR) / WAD;
 
         if (multiplier < curve.minMultiplier) {
             return curve.minMultiplier;

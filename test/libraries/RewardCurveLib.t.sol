@@ -43,12 +43,12 @@ contract RewardCurveLibTest is BaseTest {
 
     function testSinglePeriod() public {
         CurveParams memory params = defaults();
-        // Initial: Should be 100% (10000 basis points)
-        assertEq(shim.currentMultiplier(params), 10000);
+        // Initial: Should be 100%
+        assertEq(shim.currentMultiplier(params), 100);
 
-        // After 1 period: Should decay by 50% (5000 basis points)
+        // After 1 period: Should decay by 50%
         vm.warp(block.timestamp + 1 + 1 days);
-        assertEq(shim.currentMultiplier(params), 5000);
+        assertEq(shim.currentMultiplier(params), 50);
     }
 
     function testZeroMin() public {
@@ -67,17 +67,20 @@ contract RewardCurveLibTest is BaseTest {
 
     function testMinMultiplierIsMin() public {
         CurveParams memory params = defaults();
-        params.minMultiplier = 42;
+        params.minMultiplier = 3;
 
         vm.warp(block.timestamp + 2 days);
-        assertEq(shim.currentMultiplier(params), 2500); // 50% decay twice
+        assertEq(shim.currentMultiplier(params), 25); // 50% decay twice
         vm.warp(block.timestamp + 7 days);
         assertEq(shim.currentMultiplier(params), params.minMultiplier);
     }
 
-    function testFuzzDecay(uint8 numPeriods) public {
+    function testFuzzDecay(uint16 numPeriods) public {
         vm.assume(numPeriods > 0);
-        vm.assume(numPeriods <= 64);
+
+        // This has been tested with RewardCurveLib.MAX_PERIODS but it's too slow.
+        // Most subscriptions will have < 100 periods
+        vm.assume(numPeriods <= 100);
 
         CurveParams memory params = defaults();
         params.numPeriods = numPeriods;
@@ -93,7 +96,7 @@ contract RewardCurveLibTest is BaseTest {
             // Calculate expected value
             uint256 expected = baseRate.rpow(period, RewardCurveLib.WAD);
             expected =
-                (expected * RewardCurveLib.BASIS_POINTS) /
+                (expected * RewardCurveLib.SCALE_FACTOR) /
                 RewardCurveLib.WAD;
 
             assertEq(shim.currentMultiplier(params), expected);
@@ -108,7 +111,7 @@ contract RewardCurveLibTest is BaseTest {
 
         // Test 0% decay
         params.decayRate = 0;
-        assertEq(shim.currentMultiplier(params), RewardCurveLib.BASIS_POINTS); // Stays at 100%
+        assertEq(shim.currentMultiplier(params), RewardCurveLib.SCALE_FACTOR); // Stays at 100%
 
         // Test 100% decay
         params.decayRate = 100;
