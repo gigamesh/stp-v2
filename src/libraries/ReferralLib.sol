@@ -8,6 +8,8 @@ import "../types/Constants.sol";
 library ReferralLib {
     error ReferralLocked();
 
+    error InvalidReferralCode();
+
     /// @dev A referral code was created or updated
     event ReferralSet(uint256 indexed code);
 
@@ -25,26 +27,41 @@ library ReferralLib {
     }
 
     struct State {
+        /// @dev Referal code details
         mapping(uint256 => Code) codes;
+        /// @dev The BPS set for the default referral code set for each subscription token
+        uint16 defaultBps;
     }
 
     /// @dev Basic validation and storage for a referral code. A single call was used to reduce size
-    function setReferral(State storage state, uint256 code, Code memory settings) internal {
+    function setReferral(
+        State storage state,
+        uint256 code,
+        Code memory settings
+    ) internal {
         if (state.codes[code].permanent) revert ReferralLocked();
         if (settings.basisPoints == 0) {
             delete state.codes[code];
             emit ReferralDestroyed(code);
             return;
         }
-        if (settings.basisPoints > MAX_REFERRAL_BPS) revert InvalidBasisPoints();
+        if (settings.basisPoints > MAX_REFERRAL_BPS)
+            revert InvalidBasisPoints();
 
         state.codes[code] = settings;
         emit ReferralSet(code);
     }
 
     /// @dev Get bps for a referral code
-    function getBps(State storage state, uint256 code, address referrer) internal view returns (uint16) {
-        if (state.codes[code].referrer != address(0) && state.codes[code].referrer != referrer) return 0;
+    function getBps(
+        State storage state,
+        uint256 code,
+        address referrer
+    ) internal view returns (uint16) {
+        if (
+            state.codes[code].referrer != address(0) &&
+            state.codes[code].referrer != referrer
+        ) return 0;
         return state.codes[code].basisPoints;
     }
 }

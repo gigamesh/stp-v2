@@ -34,13 +34,26 @@ library SubscriptionLib {
     /////////////////////
 
     /// @dev Emitted when time is purchased (new nft or renewed)
-    event Purchase(uint64 indexed tokenId, uint256 tokensTransferred, uint48 timePurchased, uint48 expiresAt);
+    event Purchase(
+        uint64 indexed tokenId,
+        uint256 tokensTransferred,
+        uint48 timePurchased,
+        uint48 expiresAt
+    );
 
     /// @dev Emitted when the creator refunds a subscribers remaining time
-    event Refund(uint64 indexed tokenId, uint256 tokensTransferred, uint48 timeReclaimed);
+    event Refund(
+        uint64 indexed tokenId,
+        uint256 tokensTransferred,
+        uint48 timeReclaimed
+    );
 
     /// @dev Emitted when a subscriber is granted time
-    event Grant(uint64 indexed tokenId, uint48 secondsGranted, uint48 expiresAt);
+    event Grant(
+        uint64 indexed tokenId,
+        uint48 secondsGranted,
+        uint48 expiresAt
+    );
 
     /// @dev Emitted when a subscriber has granted time revoked
     event GrantRevoke(uint64 indexed tokenId, uint48 time, uint48 expiresAt);
@@ -71,14 +84,23 @@ library SubscriptionLib {
     function createTier(State storage state, Tier memory tierParams) internal {
         tierParams.validate();
         uint16 id = ++state.tierCount;
-        state.tiers[id] = TierLib.State({params: tierParams, subCount: 0, id: id});
+        state.tiers[id] = TierLib.State({
+            params: tierParams,
+            subCount: 0,
+            id: id
+        });
         emit TierCreated(id);
     }
 
     /// @dev Update all parameters of a tier
-    function updateTier(State storage state, uint16 tierId, Tier memory tierParams) internal {
+    function updateTier(
+        State storage state,
+        uint16 tierId,
+        Tier memory tierParams
+    ) internal {
         if (state.tiers[tierId].id == 0) revert TierLib.TierNotFound(tierId);
-        if (state.tiers[tierId].subCount > tierParams.maxSupply) revert TierLib.TierInvalidSupplyCap();
+        if (state.tiers[tierId].subCount > tierParams.maxSupply)
+            revert TierLib.TierInvalidSupplyCap();
         tierParams.validate();
 
         state.tiers[tierId].params = tierParams;
@@ -86,10 +108,14 @@ library SubscriptionLib {
     }
 
     /// @dev Deactivate a subscription, removing it from the tier
-    function deactivateSubscription(State storage state, address account) internal {
+    function deactivateSubscription(
+        State storage state,
+        address account
+    ) internal {
         Subscription storage sub = state.subscriptions[account];
         uint16 tierId = sub.tierId;
-        if (tierId == 0 || sub.remainingSeconds() > 0) revert DeactivationFailure();
+        if (tierId == 0 || sub.remainingSeconds() > 0)
+            revert DeactivationFailure();
         state.tiers[tierId].subCount -= 1;
         sub.tierId = 0;
         emit SwitchTier(sub.tokenId, tierId, 0);
@@ -97,14 +123,23 @@ library SubscriptionLib {
     }
 
     /// @dev Mint a new subscription for an account
-    function mint(State storage state, address account) internal returns (uint64 tokenId) {
-        if (state.subCount >= state.supplyCap) revert GlobalSupplyLimitExceeded();
+    function mint(
+        State storage state,
+        address account
+    ) internal returns (uint64 tokenId) {
+        if (state.subCount >= state.supplyCap)
+            revert GlobalSupplyLimitExceeded();
         tokenId = ++state.subCount;
         state.subscriptions[account].tokenId = tokenId;
     }
 
     /// @dev Purchase time for a subscriber, potentially switching tiers
-    function purchase(State storage state, address account, uint256 numTokens, uint16 tierId) internal {
+    function purchase(
+        State storage state,
+        address account,
+        uint256 numTokens,
+        uint16 tierId
+    ) internal {
         Subscription storage sub = state.subscriptions[account];
 
         // Determine which tier to use. If tierId input is 0, the following logic will determine the tier
@@ -134,7 +169,11 @@ library SubscriptionLib {
     }
 
     /// @dev Refund the remaining time of a subscriber. The creator sets the amount of tokens to refund, which can be 0
-    function refund(State storage state, address account, uint256 numTokens) internal {
+    function refund(
+        State storage state,
+        address account,
+        uint256 numTokens
+    ) internal {
         Subscription storage sub = state.subscriptions[account];
         if (sub.tokenId == 0) revert SubscriptionNotFound();
         uint48 refundedTime = sub.refundTime();
@@ -143,7 +182,11 @@ library SubscriptionLib {
     }
 
     /// @dev Switch the tier of a subscriber
-    function switchTier(State storage state, address account, uint16 tierId) internal {
+    function switchTier(
+        State storage state,
+        address account,
+        uint16 tierId
+    ) internal {
         Subscription storage sub = state.subscriptions[account];
         uint16 subTierId = sub.tierId;
         if (subTierId == tierId) return;
@@ -156,8 +199,10 @@ library SubscriptionLib {
         // Adjust the purchased time if necessary, and clear the granted time
         uint48 proratedTime = 0;
         if (subTierId != 0) {
-            proratedTime =
-                state.tiers[tierId].computeSwitchTimeValue(state.tiers[subTierId], sub.purchasedTimeRemaining());
+            proratedTime = state.tiers[tierId].computeSwitchTimeValue(
+                state.tiers[subTierId],
+                sub.purchasedTimeRemaining()
+            );
         }
         sub.resetExpires((block.timestamp + proratedTime).toUint48());
 
@@ -165,7 +210,12 @@ library SubscriptionLib {
     }
 
     /// @dev Grant time to a subscriber. It can be 0 seconds to switch tiers, etc
-    function grant(State storage state, address account, uint48 numSeconds, uint16 tierId) internal {
+    function grant(
+        State storage state,
+        address account,
+        uint48 numSeconds,
+        uint16 tierId
+    ) internal {
         Subscription storage sub = state.subscriptions[account];
         uint16 resolvedTier = tierId == 0 ? sub.tierId : tierId;
         if (resolvedTier == 0) resolvedTier = 1;

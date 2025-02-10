@@ -25,7 +25,13 @@ import {ContractView, SubscriberView} from "./types/Views.sol";
  * @author Fabric Inc.
  * @notice An NFT contract which allows users to mint time and access token gated content while time remains.
  */
-contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, ReentrancyGuard {
+contract STPV2 is
+    ERC721,
+    AccessControlled,
+    Multicallable,
+    Initializable,
+    ReentrancyGuard
+{
     using LibString for uint256;
     using SubscriberLib for Subscription;
     using CurrencyLib for Currency;
@@ -76,7 +82,10 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
 
     /// @dev Emitted when a referral fee is paid out
     event ReferralPayout(
-        uint256 indexed tokenId, address indexed referrer, uint256 indexed referralId, uint256 rewardAmount
+        uint256 indexed tokenId,
+        address indexed referrer,
+        uint256 indexed referralId,
+        uint256 rewardAmount
     );
 
     /// @dev Emitted when the supply cap is updated
@@ -165,19 +174,22 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
     ) public initializer {
         // Validate core params
         if (params.owner == address(0)) revert InvalidOwner();
-        if (bytes(params.name).length == 0 || bytes(params.symbol).length == 0 || bytes(params.contractUri).length == 0)
-        {
+        if (
+            bytes(params.name).length == 0 ||
+            bytes(params.symbol).length == 0 ||
+            bytes(params.contractUri).length == 0
+        ) {
             revert InvalidTokenParams();
         }
 
         // Validate fee params
         if (
-            fees.clientBps + fees.protocolBps > MAX_FEE_BPS
-                || (fees.clientRecipient == address(0) && fees.clientBps > 0)
-                || (fees.protocolRecipient == address(0) && fees.protocolBps > 0)
-                || (fees.clientRecipient != address(0) && fees.clientBps == 0)
-                || (fees.protocolRecipient != address(0) && fees.protocolBps == 0)
-                || (fees.clientReferralBps > fees.clientBps)
+            fees.clientBps + fees.protocolBps > MAX_FEE_BPS ||
+            (fees.clientRecipient == address(0) && fees.clientBps > 0) ||
+            (fees.protocolRecipient == address(0) && fees.protocolBps > 0) ||
+            (fees.clientRecipient != address(0) && fees.clientBps == 0) ||
+            (fees.protocolRecipient != address(0) && fees.protocolBps == 0) ||
+            (fees.clientReferralBps > fees.clientBps)
         ) revert InvalidFeeParams();
 
         _contractURI = params.contractUri;
@@ -185,6 +197,7 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
         _symbol = params.symbol;
         _currency = Currency.wrap(params.currencyAddress);
         _state.supplyCap = params.globalSupplyCap;
+        _referrals.defaultBps = 500;
 
         _feeParams = fees;
         _rewardParams = rewards;
@@ -224,7 +237,13 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param params the minting parameters
      */
     function mintAdvanced(MintParams calldata params) external payable {
-        _purchase(params.recipient, params.tierId, params.purchaseValue, params.referralCode, params.referrer);
+        _purchase(
+            params.recipient,
+            params.tierId,
+            params.purchaseValue,
+            params.referralCode,
+            params.referrer
+        );
     }
 
     /////////////////////////
@@ -250,9 +269,14 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param numSeconds the number of seconds to grant
      * @param tierId the tier id to grant time to (0 to match current tier, or default for new)
      */
-    function grantTime(address account, uint48 numSeconds, uint16 tierId) external nonReentrant {
+    function grantTime(
+        address account,
+        uint48 numSeconds,
+        uint16 tierId
+    ) external nonReentrant {
         _checkOwnerOrRoles(ROLE_MANAGER | ROLE_AGENT);
-        if (_state.subscriptions[account].tokenId == 0) _safeMint(account, _state.mint(account));
+        if (_state.subscriptions[account].tokenId == 0)
+            _safeMint(account, _state.mint(account));
         _state.grant(account, numSeconds, tierId);
     }
 
@@ -320,7 +344,8 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      */
     function setGlobalSupplyCap(uint64 supplyCap) external {
         _checkOwnerOrRoles(ROLE_MANAGER);
-        if (_state.subCount > supplyCap) revert SubscriptionLib.GlobalSupplyLimitExceeded();
+        if (_state.subCount > supplyCap)
+            revert SubscriptionLib.GlobalSupplyLimitExceeded();
         _state.supplyCap = supplyCap;
         emit GlobalSupplyCapChange(supplyCap);
     }
@@ -335,7 +360,8 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      */
     function createTier(Tier memory params) external {
         _checkOwnerOrRoles(ROLE_MANAGER);
-        if (params.rewardCurveId > _rewards.numCurves - 1) revert RewardPoolLib.InvalidCurve();
+        if (params.rewardCurveId > _rewards.numCurves - 1)
+            revert RewardPoolLib.InvalidCurve();
         _state.createTier(params);
     }
 
@@ -347,7 +373,8 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      */
     function updateTier(uint16 tierId, Tier memory params) external {
         _checkOwnerOrRoles(ROLE_MANAGER);
-        if (params.rewardCurveId > _rewards.numCurves - 1) revert RewardPoolLib.InvalidCurve();
+        if (params.rewardCurveId > _rewards.numCurves - 1)
+            revert RewardPoolLib.InvalidCurve();
         _state.updateTier(tierId, params);
     }
 
@@ -392,9 +419,24 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param permanent whether the referral code is locked (immutable after set)
      * @param account the specific account to reward (0x0 for any account)
      */
-    function setReferralCode(uint256 code, uint16 basisPoints, bool permanent, address account) external {
+    function setReferralCode(
+        uint256 code,
+        uint16 basisPoints,
+        bool permanent,
+        address account
+    ) external {
+        if (code < MIN_CUSTOM_REFERRAL_CODE)
+            revert ReferralLib.InvalidReferralCode();
         _checkOwnerOrRoles(ROLE_MANAGER);
-        _referrals.setReferral(code, ReferralLib.Code(basisPoints, permanent, account));
+        _referrals.setReferral(
+            code,
+            ReferralLib.Code(basisPoints, permanent, account)
+        );
+    }
+
+    function setDefaultReferralBps(uint16 bps) external {
+        _checkOwnerOrRoles(ROLE_MANAGER);
+        _referrals.defaultBps = bps;
     }
 
     /**
@@ -402,7 +444,9 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param code the unique integer code for the referral
      * @return value the reward basis points and permanence
      */
-    function referralDetail(uint256 code) external view returns (ReferralLib.Code memory value) {
+    function referralDetail(
+        uint256 code
+    ) external view returns (ReferralLib.Code memory value) {
         return _referrals.codes[code];
     }
 
@@ -428,11 +472,18 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
         if (tokenId == 0) {
             tokenId = _state.mint(account);
             _safeMint(account, tokenId);
+
+            // Set tokenId as a referral code for the minter
+            _referrals.setReferral(
+                uint256(tokenId),
+                ReferralLib.Code(_referrals.defaultBps, false, account)
+            );
         } else if (msg.sender != account) {
             // Prevent tier migration from another caller
             if (
-                _state.subscriptions[account].tierId != 0 && tierId != 0
-                    && _state.subscriptions[account].tierId != tierId
+                _state.subscriptions[account].tierId != 0 &&
+                tierId != 0 &&
+                _state.subscriptions[account].tierId != tierId
             ) revert TierLib.TierInvalidSwitch();
         }
 
@@ -453,10 +504,11 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
         }
 
         // Transfer protocol + client fees
-        tokensIn -= (
-            _transferFee(tokensIn, _feeParams.protocolBps, _feeParams.protocolRecipient)
-                + _transferFee(tokensIn, clientBps, _feeParams.clientRecipient)
-        );
+        tokensIn -= (_transferFee(
+            tokensIn,
+            _feeParams.protocolBps,
+            _feeParams.protocolRecipient
+        ) + _transferFee(tokensIn, clientBps, _feeParams.clientRecipient));
 
         // Transfer referral rewards if applicable
         if (referrerBps > 0) {
@@ -469,11 +521,19 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
         }
 
         // Issue shares and allocate funds to reward pool
-        _issueAndAllocateRewards(account, tokensIn, _state.subscriptions[account].tierId);
+        _issueAndAllocateRewards(
+            account,
+            tokensIn,
+            _state.subscriptions[account].tierId
+        );
     }
 
     /// @dev Transfer a fee to a recipient, returning the amount transferred
-    function _transferFee(uint256 amount, uint16 bps, address recipient) private returns (uint256 fee) {
+    function _transferFee(
+        uint256 amount,
+        uint16 bps,
+        address recipient
+    ) private returns (uint256 fee) {
         if (bps > 0) {
             fee = (amount * bps) / MAX_BPS;
             if (fee > 0) {
@@ -485,11 +545,16 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
 
     /// @dev Ensure the contract has a creator balance to cover the transfer, without dipping into rewards
     function _checkCreatorBalance(uint256 amount) private view {
-        if (amount > _currency.balance() - _rewards.balance()) revert InsufficientBalance();
+        if (amount > _currency.balance() - _rewards.balance())
+            revert InsufficientBalance();
     }
 
     /// @dev Issue rewards to an account and allocate funds to the pool (if configured)
-    function _issueAndAllocateRewards(address account, uint256 amount, uint16 tierId) private {
+    function _issueAndAllocateRewards(
+        address account,
+        uint256 amount,
+        uint16 tierId
+    ) private {
         uint16 bps = _state.tiers[tierId].params.rewardBasisPoints;
         uint8 curve = _state.tiers[tierId].params.rewardCurveId;
         uint256 rewards = (amount * bps) / MAX_BPS;
@@ -545,8 +610,10 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      */
     function slash(address account) external {
         if (
-            !_rewardParams.slashable
-                || _state.subscriptions[account].expiresAt + _rewardParams.slashGracePeriod > block.timestamp
+            !_rewardParams.slashable ||
+            _state.subscriptions[account].expiresAt +
+                _rewardParams.slashGracePeriod >
+            block.timestamp
         ) revert NotSlashable();
 
         // Burn shares (remove holder) and transfer any unclaimed rewards
@@ -555,7 +622,8 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
 
         // Attempt transfer of rewards to the slashed account. Transfer failure reallocates funds to the owner.
         // This is a last resort to ensure the funds are not lost and gives the owner discretion.
-        if (!_currency.tryTransfer(account, rewards)) emit SlashTransferFallback(account, rewards);
+        if (!_currency.tryTransfer(account, rewards))
+            emit SlashTransferFallback(account, rewards);
     }
 
     ////////////////////////
@@ -567,7 +635,9 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param curveId the curve id to fetch
      * @return curve the curve details
      */
-    function curveDetail(uint8 curveId) external view returns (CurveParams memory curve) {
+    function curveDetail(
+        uint8 curveId
+    ) external view returns (CurveParams memory curve) {
         return _rewards.curves[curveId];
     }
 
@@ -576,35 +646,45 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param account the account to fetch the subscription for
      * @return subscription the relevant information for a subscription
      */
-    function subscriptionOf(address account) external view returns (SubscriberView memory subscription) {
-        return SubscriberView({
-            tierId: _state.subscriptions[account].tierId,
-            tokenId: _state.subscriptions[account].tokenId,
-            expiresAt: _state.subscriptions[account].expiresAt,
-            purchaseExpiresAt: _state.subscriptions[account].purchaseExpires,
-            rewardShares: _rewards.holders[account].numShares,
-            rewardBalance: _rewards.rewardBalanceOf(account)
-        });
+    function subscriptionOf(
+        address account
+    ) external view returns (SubscriberView memory subscription) {
+        return
+            SubscriberView({
+                tierId: _state.subscriptions[account].tierId,
+                tokenId: _state.subscriptions[account].tokenId,
+                expiresAt: _state.subscriptions[account].expiresAt,
+                purchaseExpiresAt: _state
+                    .subscriptions[account]
+                    .purchaseExpires,
+                rewardShares: _rewards.holders[account].numShares,
+                rewardBalance: _rewards.rewardBalanceOf(account)
+            });
     }
 
     /**
      * @notice Get details about the contract state
      * @return detail the contract details
      */
-    function contractDetail() external view returns (ContractView memory detail) {
-        return ContractView({
-            tierCount: _state.tierCount,
-            subCount: _state.subCount,
-            supplyCap: _state.supplyCap,
-            transferRecipient: _transferRecipient,
-            currency: Currency.unwrap(_currency),
-            creatorBalance: _currency.balance() - _rewards.balance(),
-            numCurves: _rewards.numCurves,
-            rewardShares: _rewards.totalShares,
-            rewardBalance: _rewards.balance(),
-            rewardSlashGracePeriod: _rewardParams.slashGracePeriod,
-            rewardSlashable: _rewardParams.slashable
-        });
+    function contractDetail()
+        external
+        view
+        returns (ContractView memory detail)
+    {
+        return
+            ContractView({
+                tierCount: _state.tierCount,
+                subCount: _state.subCount,
+                supplyCap: _state.supplyCap,
+                transferRecipient: _transferRecipient,
+                currency: Currency.unwrap(_currency),
+                creatorBalance: _currency.balance() - _rewards.balance(),
+                numCurves: _rewards.numCurves,
+                rewardShares: _rewards.totalShares,
+                rewardBalance: _rewards.balance(),
+                rewardSlashGracePeriod: _rewardParams.slashGracePeriod,
+                rewardSlashable: _rewardParams.slashable
+            });
     }
 
     /**
@@ -620,7 +700,9 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param tierId the tier id to fetch
      * @return tier the tier details
      */
-    function tierDetail(uint16 tierId) external view returns (TierLib.State memory tier) {
+    function tierDetail(
+        uint16 tierId
+    ) external view returns (TierLib.State memory tier) {
         return _state.tiers[tierId];
     }
 
@@ -638,7 +720,10 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param account the account to fetch the balance of
      * @return numSeconds the number of seconds remaining in the subscription
      */
-    function tierBalanceOf(uint16 tierId, address account) external view returns (uint256 numSeconds) {
+    function tierBalanceOf(
+        uint16 tierId,
+        address account
+    ) external view returns (uint256 numSeconds) {
         Subscription memory sub = _state.subscriptions[account];
         if (sub.tierId != tierId) return 0;
         return sub.remainingSeconds();
@@ -678,7 +763,9 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param tokenId the tokenId to fetch the metadata URI for
      * @return uri the URI for the token
      */
-    function tokenURI(uint256 tokenId) public view override returns (string memory uri) {
+    function tokenURI(
+        uint256 tokenId
+    ) public view override returns (string memory uri) {
         ownerOf(tokenId); // revert if not found
         return string(abi.encodePacked(_contractURI, "/", tokenId.toString()));
     }
@@ -688,16 +775,24 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param account the account to fetch the balance of
      * @return numSeconds the number of seconds remaining in the subscription
      */
-    function balanceOf(address account) public view override returns (uint256 numSeconds) {
+    function balanceOf(
+        address account
+    ) public view override returns (uint256 numSeconds) {
         return _state.subscriptions[account].remainingSeconds();
     }
 
     /// @dev Prevent burning, handle soulbound tiers, and transfer subscription/reward state
-    function _beforeTokenTransfer(address from, address to, uint256) internal override {
-        if (_state.subscriptions[to].tokenId != 0) revert TransferToExistingSubscriber();
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256
+    ) internal override {
+        if (_state.subscriptions[to].tokenId != 0)
+            revert TransferToExistingSubscriber();
         if (from != address(0)) {
             uint16 tierId = _state.subscriptions[from].tierId;
-            if (tierId != 0 && !_state.tiers[tierId].params.transferrable) revert TierLib.TierTransferDisabled();
+            if (tierId != 0 && !_state.tiers[tierId].params.transferrable)
+                revert TierLib.TierTransferDisabled();
 
             _state.subscriptions[to] = _state.subscriptions[from];
             delete _state.subscriptions[from];
@@ -717,7 +812,11 @@ contract STPV2 is ERC721, AccessControlled, Multicallable, Initializable, Reentr
      * @param recipientAddress the address to send the tokens to
      * @param tokenAmount the amount of tokens to send
      */
-    function recoverCurrency(address tokenAddress, address recipientAddress, uint256 tokenAmount) external {
+    function recoverCurrency(
+        address tokenAddress,
+        address recipientAddress,
+        uint256 tokenAmount
+    ) external {
         _checkOwner();
         if (tokenAddress == Currency.unwrap(_currency)) revert NotAuthorized();
         Currency.wrap(tokenAddress).transfer(recipientAddress, tokenAmount);
