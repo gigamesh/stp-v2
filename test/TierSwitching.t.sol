@@ -23,7 +23,12 @@ contract TierSwitchingTest is BaseTest {
                 pricePerPeriod: 0.002 ether,
                 startTimestamp: 0,
                 endTimestamp: 0,
-                gate: Gate({gateType: GateType.NONE, contractAddress: address(0), componentId: 0, balanceMin: 0})
+                gate: Gate({
+                    gateType: GateType.NONE,
+                    contractAddress: address(0),
+                    componentId: 0,
+                    balanceMin: 0
+                })
             })
         );
         vm.stopPrank();
@@ -37,7 +42,9 @@ contract TierSwitchingTest is BaseTest {
         assertEq(stp.subscriptionOf(alice).tierId, 1);
         assertEq(stp.tierDetail(1).subCount, 1);
 
-        vm.expectRevert(abi.encodeWithSelector(SubscriptionLib.DeactivationFailure.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(SubscriptionLib.DeactivationFailure.selector)
+        );
         stp.deactivateSubscription(alice);
 
         vm.warp(block.timestamp + 31 days);
@@ -61,7 +68,12 @@ contract TierSwitchingTest is BaseTest {
         vm.expectEmit(true, true, false, true, address(stp));
         emit SubscriptionLib.SwitchTier(1, 1, 2);
         stp.mintAdvanced{value: 0.002 ether}(
-            MintParams({tierId: 2, recipient: alice, referrer: address(0), referralCode: 0, purchaseValue: 0.002 ether})
+            MintParams({
+                tierId: 2,
+                recipient: alice,
+                referralCode: 0,
+                purchaseValue: 0.002 ether
+            })
         );
 
         assertEq(stp.subscriptionOf(alice).tierId, 2);
@@ -69,18 +81,35 @@ contract TierSwitchingTest is BaseTest {
     }
 
     function testInvalidTier() public prank(alice) {
-        vm.expectRevert(abi.encodeWithSelector(TierLib.TierNotFound.selector, 20));
+        vm.expectRevert(
+            abi.encodeWithSelector(TierLib.TierNotFound.selector, 20)
+        );
         stp.mintAdvanced{value: 0.002 ether}(
-            MintParams({tierId: 20, recipient: alice, referrer: address(0), referralCode: 0, purchaseValue: 0.002 ether})
+            MintParams({
+                tierId: 20,
+                recipient: alice,
+                referralCode: 0,
+                purchaseValue: 0.002 ether
+            })
         );
     }
 
     function testDowngrade() public prank(alice) {
         stp.mintAdvanced{value: 0.002 ether}(
-            MintParams({tierId: 2, recipient: alice, referrer: address(0), referralCode: 0, purchaseValue: 0.002 ether})
+            MintParams({
+                tierId: 2,
+                recipient: alice,
+                referralCode: 0,
+                purchaseValue: 0.002 ether
+            })
         );
         stp.mintAdvanced{value: 0.001 ether}(
-            MintParams({tierId: 1, recipient: alice, referrer: address(0), referralCode: 0, purchaseValue: 0.001 ether})
+            MintParams({
+                tierId: 1,
+                recipient: alice,
+                referralCode: 0,
+                purchaseValue: 0.001 ether
+            })
         );
 
         assertEq(stp.subscriptionOf(alice).tierId, 1);

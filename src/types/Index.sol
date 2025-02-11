@@ -104,8 +104,6 @@ struct MintParams {
     uint16 tierId;
     /// @dev The address of the recipient (token holder)
     address recipient;
-    /// @dev The address of the referrer (reward recipient)
-    address referrer;
     /// @dev The referral code
     uint256 referralCode;
     /// @dev The number of tokens being transferred

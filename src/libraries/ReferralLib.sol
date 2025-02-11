@@ -10,11 +10,20 @@ library ReferralLib {
 
     error InvalidReferralCode();
 
+    error NonExistantReferralCode();
+
+    error InvalidReferrer();
+
+    error CodeAlreadyExists();
+
     /// @dev A referral code was created or updated
     event ReferralSet(uint256 indexed code);
 
     /// @dev A referral code was destroyed (set to 0)
     event ReferralDestroyed(uint256 indexed code);
+
+    /// @dev The default referral BPS was set
+    event DefaultReferralBpsSet(uint16 bps);
 
     /// @dev Struct for holding details of a referral code
     struct Code {
@@ -48,20 +57,9 @@ library ReferralLib {
         if (settings.basisPoints > MAX_REFERRAL_BPS)
             revert InvalidBasisPoints();
 
+        if (settings.referrer == address(0)) revert InvalidReferrer();
+
         state.codes[code] = settings;
         emit ReferralSet(code);
-    }
-
-    /// @dev Get bps for a referral code
-    function getBps(
-        State storage state,
-        uint256 code,
-        address referrer
-    ) internal view returns (uint16) {
-        if (
-            state.codes[code].referrer != address(0) &&
-            state.codes[code].referrer != referrer
-        ) return 0;
-        return state.codes[code].basisPoints;
     }
 }

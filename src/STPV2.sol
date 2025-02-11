@@ -228,7 +228,7 @@ contract STPV2 is
      * @param numTokens the amount of ERC20 tokens or native tokens to transfer
      */
     function mintFor(address account, uint256 numTokens) public payable {
-        _purchase(account, 0, numTokens, 0, address(0));
+        _purchase(account, 0, numTokens, 0);
     }
 
     /**
@@ -241,8 +241,7 @@ contract STPV2 is
             params.recipient,
             params.tierId,
             params.purchaseValue,
-            params.referralCode,
-            params.referrer
+            params.referralCode
         );
     }
 
@@ -413,30 +412,85 @@ contract STPV2 is
     /////////////////////////
 
     /**
-     * @notice Create or update a referral code for giving rewards to referrers on mint
+     * @notice Create a custom referral code for giving rewards to referrers on mint
      * @param code the unique integer code for the referral
      * @param basisPoints the reward basis points (max = 50% = 5000 bps)
      * @param permanent whether the referral code is locked (immutable after set)
-     * @param account the specific account to reward (0x0 for any account)
+     * @param account the specific account to reward
      */
-    function setReferralCode(
+    function createCustomReferralCode(
         uint256 code,
         uint16 basisPoints,
         bool permanent,
         address account
     ) external {
+        _checkOwnerOrRoles(ROLE_MANAGER);
+        ReferralLib.Code memory referralInfo = _referrals.codes[code];
+
         if (code < MIN_CUSTOM_REFERRAL_CODE)
             revert ReferralLib.InvalidReferralCode();
-        _checkOwnerOrRoles(ROLE_MANAGER);
+
+        if (referralInfo.basisPoints != 0)
+            revert ReferralLib.CodeAlreadyExists();
+
         _referrals.setReferral(
             code,
             ReferralLib.Code(basisPoints, permanent, account)
         );
     }
 
+    /**
+     * @notice Update an existing referral code
+     * @param code the unique integer code for the referral
+     * @param basisPoints the reward basis points
+     * @param account the specific account to reward
+     */
+    function updateReferralCode(
+        uint256 code,
+        uint16 basisPoints,
+        address account
+    ) external {
+        ReferralLib.Code memory referralInfo = _referrals.codes[code];
+
+        if (referralInfo.basisPoints == 0)
+            revert ReferralLib.NonExistantReferralCode();
+
+        // Code Ids below the minimum custom referral code are reserved for
+        // default referral codes (subscription token IDs). The basis points for these codes can't
+        // be increased beyond the default referral basis points.
+        if (
+            code < MIN_CUSTOM_REFERRAL_CODE &&
+            basisPoints > _referrals.defaultBps
+        ) {
+            revert InvalidBasisPoints();
+        }
+
+        _referrals.setReferral(
+            code,
+            ReferralLib.Code(basisPoints, referralInfo.permanent, account)
+        );
+    }
+
+    /**
+     * @notice Set the default referral reward basis points assigned to all subscribers
+     * @param bps the default reward basis points (max = 50% = 5000 bps)
+     */
     function setDefaultReferralBps(uint16 bps) external {
         _checkOwnerOrRoles(ROLE_MANAGER);
+
+        if (bps > MAX_BPS) revert InvalidBasisPoints();
+
         _referrals.defaultBps = bps;
+
+        emit ReferralLib.DefaultReferralBpsSet(bps);
+    }
+
+    /**
+     * @notice Fetch the default referral basis points
+     * @return the default referral basis points
+     */
+    function defaultReferralBps() external view returns (uint16) {
+        return _referrals.defaultBps;
     }
 
     /**
@@ -459,8 +513,7 @@ contract STPV2 is
         address account,
         uint16 tierId,
         uint256 numTokens,
-        uint256 code,
-        address referrer
+        uint256 code
     ) private nonReentrant {
         uint256 tokensIn = 0;
 
@@ -492,16 +545,6 @@ contract STPV2 is
 
         // Calculate client / referrer split if referral code isn't applicable
         uint16 clientBps = _feeParams.clientBps;
-        uint16 referrerBps = 0;
-
-        if (referrer != address(0)) {
-            referrerBps = _referrals.getBps(code, referrer);
-            // Fallback to client split if referrer code nets 0 bps
-            if (referrerBps == 0) {
-                referrerBps = _feeParams.clientReferralBps;
-                clientBps -= referrerBps;
-            }
-        }
 
         // Transfer protocol + client fees
         tokensIn -= (_transferFee(
@@ -510,14 +553,18 @@ contract STPV2 is
             _feeParams.protocolRecipient
         ) + _transferFee(tokensIn, clientBps, _feeParams.clientRecipient));
 
-        // Transfer referral rewards if applicable
-        if (referrerBps > 0) {
-            uint256 payout = (tokensIn * referrerBps) / MAX_BPS;
-            if (payout > 0) {
-                tokensIn -= payout;
-                _currency.transfer(referrer, payout);
-                emit ReferralPayout(tokenId, referrer, code, payout);
-            }
+        ReferralLib.Code memory referralInfo = _referrals.codes[code];
+
+        // Ensure user can't accidentally use a non-existent referral code
+        if (code > 0 && referralInfo.basisPoints == 0)
+            revert ReferralLib.NonExistantReferralCode();
+
+        // Transfer referral rewards
+        uint256 payout = (tokensIn * referralInfo.basisPoints) / MAX_BPS;
+        if (payout > 0) {
+            tokensIn -= payout;
+            _currency.transfer(referralInfo.referrer, payout);
+            emit ReferralPayout(tokenId, referralInfo.referrer, code, payout);
         }
 
         // Issue shares and allocate funds to reward pool

@@ -23,8 +23,14 @@ contract MintingTest is BaseTest {
         assertEq(stp.balanceOf(alice), 30 days);
         assertEq(stp.subscriptionOf(alice).tokenId, 1);
         assertEq(stp.subscriptionOf(alice).tierId, 1);
-        assertEq(stp.subscriptionOf(alice).expiresAt, block.timestamp + 30 days);
-        assertEq(stp.subscriptionOf(alice).purchaseExpiresAt, block.timestamp + 30 days);
+        assertEq(
+            stp.subscriptionOf(alice).expiresAt,
+            block.timestamp + 30 days
+        );
+        assertEq(
+            stp.subscriptionOf(alice).purchaseExpiresAt,
+            block.timestamp + 30 days
+        );
         assertEq(stp.ownerOf(1), alice);
     }
 
@@ -38,10 +44,17 @@ contract MintingTest is BaseTest {
     }
 
     function testMintFor() public prank(alice) {
-        vm.expectRevert(abi.encodeWithSelector(ERC721.TransferToZeroAddress.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ERC721.TransferToZeroAddress.selector)
+        );
         stp.mintFor{value: 0.001 ether}(address(0), 0.001 ether);
         vm.expectEmit(true, true, false, true, address(stp));
-        emit SubscriptionLib.Purchase(1, 0.001 ether, 30 days, uint48(block.timestamp + 30 days));
+        emit SubscriptionLib.Purchase(
+            1,
+            0.001 ether,
+            30 days,
+            uint48(block.timestamp + 30 days)
+        );
 
         vm.expectEmit(true, true, false, true, address(stp));
         emit IERC4906.MetadataUpdate(1);
@@ -54,13 +67,20 @@ contract MintingTest is BaseTest {
 
     function testMintAdvanced() public prank(alice) {
         stp.mintAdvanced{value: 0.001 ether}(
-            MintParams({tierId: 1, recipient: bob, referrer: address(0), referralCode: 0, purchaseValue: 0.001 ether})
+            MintParams({
+                tierId: 1,
+                recipient: bob,
+                referralCode: 0,
+                purchaseValue: 0.001 ether
+            })
         );
         assertEq(stp.balanceOf(bob), 30 days);
     }
 
     function testMintInvalid() public prank(alice) {
-        vm.expectRevert(abi.encodeWithSelector(CurrencyLib.InvalidCapture.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(CurrencyLib.InvalidCapture.selector)
+        );
         stp.mint{value: 0.0005 ether}(0.001 ether);
     }
 
@@ -68,9 +88,15 @@ contract MintingTest is BaseTest {
         tierParams.initialMintPrice = 0.01 ether;
         stp = reinitStp();
         mint(alice, 0.011 ether);
-        assertEq(stp.subscriptionOf(alice).expiresAt, block.timestamp + 30 days);
+        assertEq(
+            stp.subscriptionOf(alice).expiresAt,
+            block.timestamp + 30 days
+        );
         mint(alice, 0.001 ether);
-        assertEq(stp.subscriptionOf(alice).expiresAt, block.timestamp + 60 days);
+        assertEq(
+            stp.subscriptionOf(alice).expiresAt,
+            block.timestamp + 60 days
+        );
     }
 
     function testMintERC20FeeTaking() public {
@@ -99,7 +125,11 @@ contract MintingTest is BaseTest {
         mint(bob, 0.001 ether);
         assertEq(stp.contractDetail().subCount, 2);
         vm.startPrank(creator);
-        vm.expectRevert(abi.encodeWithSelector(SubscriptionLib.GlobalSupplyLimitExceeded.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SubscriptionLib.GlobalSupplyLimitExceeded.selector
+            )
+        );
         stp.setGlobalSupplyCap(1);
 
         vm.expectEmit(true, true, false, true, address(stp));
@@ -108,7 +138,11 @@ contract MintingTest is BaseTest {
         vm.stopPrank();
 
         vm.startPrank(charlie);
-        vm.expectRevert(abi.encodeWithSelector(SubscriptionLib.GlobalSupplyLimitExceeded.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SubscriptionLib.GlobalSupplyLimitExceeded.selector
+            )
+        );
         stp.mint{value: 0.001 ether}(0.001 ether);
     }
 
@@ -128,7 +162,9 @@ contract MintingTest is BaseTest {
     function testRenewalChecks() public prank(creator) {
         tierParams.paused = true;
         stp.updateTier(1, tierParams);
-        vm.expectRevert(abi.encodeWithSelector(TierLib.TierRenewalsPaused.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(TierLib.TierRenewalsPaused.selector)
+        );
         stp.mintFor{value: 0.001 ether}(alice, 0.001 ether);
     }
 
@@ -139,21 +175,43 @@ contract MintingTest is BaseTest {
 
         // Mint a new token for bob
         stp.mintAdvanced{value: 0.001 ether}(
-            MintParams({tierId: 2, recipient: bob, referrer: address(0), referralCode: 0, purchaseValue: 0.001 ether})
+            MintParams({
+                tierId: 2,
+                recipient: bob,
+                referralCode: 0,
+                purchaseValue: 0.001 ether
+            })
         );
 
         // Disallow explicit switching unless the sender is the recipient
-        vm.expectRevert(abi.encodeWithSelector(TierLib.TierInvalidSwitch.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(TierLib.TierInvalidSwitch.selector)
+        );
         stp.mintAdvanced{value: 0.001 ether}(
-            MintParams({tierId: 1, recipient: bob, referrer: address(0), referralCode: 0, purchaseValue: 0.001 ether})
+            MintParams({
+                tierId: 1,
+                recipient: bob,
+                referralCode: 0,
+                purchaseValue: 0.001 ether
+            })
         );
 
         // Ok
         stp.mintAdvanced{value: 0.001 ether}(
-            MintParams({tierId: 2, recipient: bob, referrer: address(0), referralCode: 0, purchaseValue: 0.001 ether})
+            MintParams({
+                tierId: 2,
+                recipient: bob,
+                referralCode: 0,
+                purchaseValue: 0.001 ether
+            })
         );
         stp.mintAdvanced{value: 0.001 ether}(
-            MintParams({tierId: 0, recipient: bob, referrer: address(0), referralCode: 0, purchaseValue: 0.001 ether})
+            MintParams({
+                tierId: 0,
+                recipient: bob,
+                referralCode: 0,
+                purchaseValue: 0.001 ether
+            })
         );
         stp.mintFor{value: 0.001 ether}(bob, 0.001 ether);
 
@@ -161,7 +219,12 @@ contract MintingTest is BaseTest {
         vm.startPrank(bob);
         uint256 time = stp.tierBalanceOf(2, bob);
         stp.mintAdvanced{value: 0.001 ether}(
-            MintParams({tierId: 1, recipient: bob, referrer: address(0), referralCode: 0, purchaseValue: 0.001 ether})
+            MintParams({
+                tierId: 1,
+                recipient: bob,
+                referralCode: 0,
+                purchaseValue: 0.001 ether
+            })
         );
         assertApproxEqAbs(stp.tierBalanceOf(1, bob), time + 30 days, 1);
         vm.stopPrank();
@@ -172,7 +235,12 @@ contract MintingTest is BaseTest {
 
         // Place on tier 2
         stp.mintAdvanced{value: 0.001 ether}(
-            MintParams({tierId: 2, recipient: bob, referrer: address(0), referralCode: 0, purchaseValue: 0.001 ether})
+            MintParams({
+                tierId: 2,
+                recipient: bob,
+                referralCode: 0,
+                purchaseValue: 0.001 ether
+            })
         );
     }
 }
