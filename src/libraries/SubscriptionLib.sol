@@ -125,12 +125,14 @@ library SubscriptionLib {
     /// @dev Mint a new subscription for an account
     function mint(
         State storage state,
-        address account
+        address account,
+        uint256 referralCode
     ) internal returns (uint64 tokenId) {
         if (state.subCount >= state.supplyCap)
             revert GlobalSupplyLimitExceeded();
         tokenId = ++state.subCount;
         state.subscriptions[account].tokenId = tokenId;
+        state.subscriptions[account].referralCode = referralCode;
     }
 
     /// @dev Purchase time for a subscriber, potentially switching tiers

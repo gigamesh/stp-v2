@@ -96,6 +96,8 @@ struct Subscription {
     uint48 expiresAt;
     /// @dev The tokenId for the subscription
     uint64 tokenId;
+    /// @dev The referral code used to create the subscription
+    uint256 referralCode;
 }
 
 /// @dev The advanced parameters for minting a subscription

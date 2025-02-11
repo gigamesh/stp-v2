@@ -275,7 +275,7 @@ contract STPV2 is
     ) external nonReentrant {
         _checkOwnerOrRoles(ROLE_MANAGER | ROLE_AGENT);
         if (_state.subscriptions[account].tokenId == 0)
-            _safeMint(account, _state.mint(account));
+            _safeMint(account, _state.mint(account, 0));
         _state.grant(account, numSeconds, tierId);
     }
 
@@ -508,36 +508,62 @@ contract STPV2 is
     // Core Internal Logic
     ////////////////////////
 
-    /// @dev Purchase a subscription, minting a token if necessary, switching tiers if necessary
+    /**
+     * @notice Purchase a subscription, minting a token if necessary, switching tiers if necessary
+     * @param account the account to purchase the subscription for
+     * @param tierId the tier id to purchase
+     * @param numTokens the number of tokens to purchase
+     * @param referralCode the referral code to use
+     */
     function _purchase(
         address account,
         uint16 tierId,
         uint256 numTokens,
-        uint256 code
+        uint256 referralCode
     ) private nonReentrant {
         uint256 tokensIn = 0;
+
+        Subscription storage sub = _state.subscriptions[account];
+
+        // This ensures the original referrer gets the lifetime referral cut
+        // for subscriptions started with their code.
+        if (
+            // Check if subscription already exists
+            sub.tokenId != 0
+        ) {
+            // Revert if provided code isn't null and doesn't match existing subscription's code
+            if (referralCode != 0 && referralCode != sub.referralCode) {
+                revert ReferralLib.InvalidReferralCode();
+            }
+            // Set in case it wasn't provided
+            referralCode = sub.referralCode;
+        }
 
         // Allow for free minting for pay what you want tiers
         if (numTokens > 0) tokensIn = _currency.capture(numTokens);
 
         // Mint a new token if necessary
-        uint256 tokenId = _state.subscriptions[account].tokenId;
+        uint256 tokenId = sub.tokenId;
         if (tokenId == 0) {
-            tokenId = _state.mint(account);
+            tokenId = _state.mint(account, referralCode);
             _safeMint(account, tokenId);
 
-            // Set tokenId as a referral code for the minter
+            // Set tokenId as the default referral code for the new subscriber
             _referrals.setReferral(
                 uint256(tokenId),
                 ReferralLib.Code(_referrals.defaultBps, false, account)
             );
-        } else if (msg.sender != account) {
-            // Prevent tier migration from another caller
-            if (
-                _state.subscriptions[account].tierId != 0 &&
-                tierId != 0 &&
-                _state.subscriptions[account].tierId != tierId
-            ) revert TierLib.TierInvalidSwitch();
+        }
+        // Adding time to existing subscription
+        else {
+            if (msg.sender != account) {
+                // Prevent tier migration from another caller
+                if (
+                    _state.subscriptions[account].tierId != 0 &&
+                    tierId != 0 &&
+                    _state.subscriptions[account].tierId != tierId
+                ) revert TierLib.TierInvalidSwitch();
+            }
         }
 
         // Purchase the subscription (switching tiers if necessary)
@@ -553,10 +579,12 @@ contract STPV2 is
             _feeParams.protocolRecipient
         ) + _transferFee(tokensIn, clientBps, _feeParams.clientRecipient));
 
-        ReferralLib.Code memory referralInfo = _referrals.codes[code];
+        ReferralLib.Code memory referralInfo = _referrals.codes[
+            sub.referralCode
+        ];
 
         // Ensure user can't accidentally use a non-existent referral code
-        if (code > 0 && referralInfo.basisPoints == 0)
+        if (referralCode > 0 && referralInfo.basisPoints == 0)
             revert ReferralLib.NonExistantReferralCode();
 
         // Transfer referral rewards
@@ -564,15 +592,16 @@ contract STPV2 is
         if (payout > 0) {
             tokensIn -= payout;
             _currency.transfer(referralInfo.referrer, payout);
-            emit ReferralPayout(tokenId, referralInfo.referrer, code, payout);
+            emit ReferralPayout(
+                tokenId,
+                referralInfo.referrer,
+                referralCode,
+                payout
+            );
         }
 
         // Issue shares and allocate funds to reward pool
-        _issueAndAllocateRewards(
-            account,
-            tokensIn,
-            _state.subscriptions[account].tierId
-        );
+        _issueAndAllocateRewards(account, tokensIn, sub.tierId);
     }
 
     /// @dev Transfer a fee to a recipient, returning the amount transferred
@@ -605,6 +634,7 @@ contract STPV2 is
         uint16 bps = _state.tiers[tierId].params.rewardBasisPoints;
         uint8 curve = _state.tiers[tierId].params.rewardCurveId;
         uint256 rewards = (amount * bps) / MAX_BPS;
+
         if (rewards == 0) return;
 
         // It's possible for 0 shares to be issued if the curve is not set, or the multipler is 0

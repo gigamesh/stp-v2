@@ -201,4 +201,74 @@ contract ReferralTests is BaseTest {
             address(0)
         );
     }
+
+    function testLifetimeReferrals() public {
+        // Alice mints, which creates tokenId 1 & referral code 1
+        vm.startPrank(alice);
+        stp.mint{value: 0.1 ether}(0.1 ether);
+        vm.stopPrank();
+
+        // Verify tokenId 1 is Alice's referral code
+        assertEq(stp.referralDetail(1).referrer, alice);
+
+        uint256 balance = alice.balance;
+
+        vm.warp(block.timestamp + 1 days);
+
+        // Bob use's Alices sub tokenId as referral code, which
+        // makes her the lifetime referrer for his subscription
+        vm.expectEmit(true, true, false, true, address(stp));
+        emit STPV2.ReferralPayout(2, alice, 1, 5e15);
+        stp.mintAdvanced{value: 0.1 ether}(
+            MintParams({
+                tierId: 1,
+                recipient: bob,
+                referralCode: 1, // Alice's sub tokenId & referral code
+                purchaseValue: 0.1 ether
+            })
+        );
+
+        assertEq(alice.balance, balance + 5e15);
+
+        // Bob tries to mint with a different referral code, but it should fail
+        vm.expectRevert(
+            abi.encodeWithSelector(ReferralLib.InvalidReferralCode.selector)
+        );
+        stp.mintAdvanced{value: 0.1 ether}(
+            MintParams({
+                tierId: 1,
+                recipient: bob,
+                referralCode: 2, // Different referral code
+                purchaseValue: 0.1 ether
+            })
+        );
+
+        // Bob mints with no referral code, which should automatically use Alice as the referrer
+        vm.expectEmit(true, true, false, true, address(stp));
+        emit STPV2.ReferralPayout(2, alice, 1, 5e15);
+        stp.mintAdvanced{value: 0.1 ether}(
+            MintParams({
+                tierId: 1,
+                recipient: bob,
+                referralCode: 0, // No referral code
+                purchaseValue: 0.1 ether
+            })
+        );
+
+        assertEq(alice.balance, balance + 10e15);
+
+        // Bob can provide Alice's referral code
+        vm.expectEmit(true, true, false, true, address(stp));
+        emit STPV2.ReferralPayout(2, alice, 1, 5e15);
+        stp.mintAdvanced{value: 0.1 ether}(
+            MintParams({
+                tierId: 1,
+                recipient: bob,
+                referralCode: 1, // Alice's sub tokenId & referral code
+                purchaseValue: 0.1 ether
+            })
+        );
+
+        assertEq(alice.balance, balance + 15e15);
+    }
 }
