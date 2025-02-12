@@ -126,7 +126,7 @@ library RewardPoolLib {
     }
 
     /// @dev Issue shares to a holder
-    function issue(
+    function issueShares(
         State storage state,
         address holder,
         uint256 numShares
@@ -141,24 +141,29 @@ library RewardPoolLib {
     }
 
     /// @dev Issue shares to a holder with a curve multiplier
-    function issueWithCurve(
+    function issueSharesWithCurve(
         State storage state,
         address holder,
         uint256 numShares,
         uint8 curveId
     ) internal {
-        state.issue(
+        state.issueShares(
             holder,
             numShares * state.curves[curveId].currentMultiplier()
         );
     }
 
     /// @dev Allocate rewards to the pool for holders to claim (capture should be done separately)
-    function allocate(State storage state, uint256 amount) internal {
+    function allocateRewards(
+        State storage state,
+        uint256 rewardTokens
+    ) internal {
         if (state.totalShares == 0) revert AllocationWithoutShares();
-        state.pointsPerShare += (amount * PRECISION_FACTOR) / state.totalShares;
-        state.totalRewardIngress += amount;
-        emit RewardsAllocated(amount);
+        state.pointsPerShare +=
+            (rewardTokens * PRECISION_FACTOR) /
+            state.totalShares;
+        state.totalRewardIngress += rewardTokens;
+        emit RewardsAllocated(rewardTokens);
     }
 
     /// @dev Claim rewards for a holder (transfer should be done separately)
@@ -189,7 +194,7 @@ library RewardPoolLib {
 
     /// @dev Claim rewards and burn shares of a holder.
     ///      Note: Ensure the caller transfers the reward amount to the holder
-    function burn(
+    function burnSharesClaimRewards(
         State storage state,
         address account
     ) internal returns (uint256 transferAmount) {

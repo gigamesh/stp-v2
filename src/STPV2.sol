@@ -2,6 +2,8 @@
 
 pragma solidity 0.8.25;
 
+import {console} from "@forge/console.sol";
+
 import {Initializable} from "@solady/utils/Initializable.sol";
 import {LibString} from "@solady/utils/LibString.sol";
 import {Multicallable} from "@solady/utils/Multicallable.sol";
@@ -12,13 +14,14 @@ import {ERC721} from "./abstracts/ERC721.sol";
 import {Currency, CurrencyLib} from "./libraries/CurrencyLib.sol";
 import {ReferralLib} from "./libraries/ReferralLib.sol";
 import {RewardPoolLib} from "./libraries/RewardPoolLib.sol";
+import {RewardCurveLib} from "./libraries/RewardCurveLib.sol";
 import {SubscriberLib} from "./libraries/SubscriberLib.sol";
 import {SubscriptionLib} from "./libraries/SubscriptionLib.sol";
 import {TierLib} from "./libraries/TierLib.sol";
 import "./types/Constants.sol";
 import {FeeParams, InitParams, MintParams, Subscription, Tier} from "./types/Index.sol";
 import {CurveParams, RewardParams} from "./types/Rewards.sol";
-import {ContractView, SubscriberView} from "./types/Views.sol";
+import {ContractView, SubscriberView, CurveView} from "./types/Views.sol";
 
 /**
  * @title Subscription Token Protocol Version 2
@@ -80,12 +83,12 @@ contract STPV2 is
     /// @dev Emitted when the client fee recipient is updated
     event ClientFeeRecipientChange(address indexed account);
 
-    /// @dev Emitted when a referral fee is paid out
-    event ReferralPayout(
+    /// @dev Emitted when reward shares are granted to a referrer
+    event Referral(
         uint256 indexed tokenId,
         address indexed referrer,
         uint256 indexed referralId,
-        uint256 rewardAmount
+        uint256 rewardShares
     );
 
     /// @dev Emitted when the supply cap is updated
@@ -196,7 +199,7 @@ contract STPV2 is
         _symbol = params.symbol;
         _currency = Currency.wrap(params.currencyAddress);
         _state.supplyCap = params.globalSupplyCap;
-        _referrals.defaultBps = 500;
+        _referrals.defaultBps = 1000;
 
         _feeParams = fees;
         _rewardParams = rewards;
@@ -534,8 +537,6 @@ contract STPV2 is
             if (referralCode != 0 && referralCode != sub.referralCode) {
                 revert ReferralLib.InvalidReferralCode();
             }
-            // Set in case it wasn't provided
-            referralCode = sub.referralCode;
         }
 
         // Allow for free minting for pay what you want tiers
@@ -583,24 +584,26 @@ contract STPV2 is
         ];
 
         // Ensure user can't accidentally use a non-existent referral code
-        if (referralCode > 0 && referralInfo.basisPoints == 0)
+        if (sub.referralCode > 0 && referralInfo.basisPoints == 0)
             revert ReferralLib.NonExistantReferralCode();
 
-        // Transfer referral rewards
-        uint256 payout = (tokensIn * referralInfo.basisPoints) / MAX_BPS;
-        if (payout > 0) {
-            tokensIn -= payout;
-            _currency.transfer(referralInfo.referrer, payout);
-            emit ReferralPayout(
-                tokenId,
-                referralInfo.referrer,
-                referralCode,
-                payout
-            );
-        }
-
         // Issue shares and allocate funds to reward pool
-        _issueAndAllocateRewards(account, tokensIn, sub.tierId);
+        uint256 referrerTokens = (tokensIn * referralInfo.basisPoints) /
+            MAX_BPS;
+        uint256 subscriberTokens = tokensIn - referrerTokens;
+
+        // console.log("tokensIn", tokensIn);
+        // console.log("referrer", referralInfo.referrer);
+        // console.log("bps", referralInfo.basisPoints);
+
+        // console.log(
+        //     "Referrer: %s, Subscriber: %s",
+        //     referrerRewardTokens,
+        //     subscriberRewardTokens
+        // );
+
+        _issueAndAllocateRewards(referralInfo.referrer, referrerTokens);
+        _issueAndAllocateRewards(account, subscriberTokens);
     }
 
     /// @dev Transfer a fee to a recipient, returning the amount transferred
@@ -627,18 +630,23 @@ contract STPV2 is
     /// @dev Issue rewards to an account and allocate funds to the pool (if configured)
     function _issueAndAllocateRewards(
         address account,
-        uint256 amount,
-        uint16 tierId
+        uint256 tokensIn
     ) private {
-        uint16 bps = _state.tiers[tierId].params.rewardBasisPoints;
-        uint8 curve = _state.tiers[tierId].params.rewardCurveId;
-        uint256 rewards = (amount * bps) / MAX_BPS;
+        Subscription storage sub = _state.subscriptions[account];
+        uint16 bps = _state.tiers[sub.tierId].params.rewardBasisPoints;
+        uint8 curve = _state.tiers[sub.tierId].params.rewardCurveId;
+        uint256 rewardTokens = (tokensIn * bps) / MAX_BPS;
 
-        if (rewards == 0) return;
+        // console.log("account", account);
+        // console.log("bps", bps);
+        // console.log("tokensIn", tokensIn);
+        // console.log("rewardTokens", rewardTokens);
+
+        if (rewardTokens == 0) return;
 
         // It's possible for 0 shares to be issued if the curve is not set, or the multipler is 0
-        _rewards.issueWithCurve(account, rewards, curve);
-        _rewards.allocate(rewards);
+        _rewards.issueSharesWithCurve(account, rewardTokens, curve);
+        _rewards.allocateRewards(rewardTokens);
     }
 
     ////////////////////////
@@ -650,7 +658,7 @@ contract STPV2 is
      */
     function issueRewardShares(address account, uint256 numShares) external {
         _checkOwnerOrRoles(ROLE_ISSUER);
-        _rewards.issue(account, numShares);
+        _rewards.issueShares(account, numShares);
     }
 
     /**
@@ -658,7 +666,7 @@ contract STPV2 is
      * @param amount the amount of tokens (native or ERC20) to allocate
      */
     function yieldRewards(uint256 amount) external payable nonReentrant {
-        _rewards.allocate(_currency.capture(amount));
+        _rewards.allocateRewards(_currency.capture(amount));
     }
 
     /**
@@ -693,7 +701,7 @@ contract STPV2 is
         ) revert NotSlashable();
 
         // Burn shares (remove holder) and transfer any unclaimed rewards
-        uint256 rewards = _rewards.burn(account);
+        uint256 rewards = _rewards.burnSharesClaimRewards(account);
         if (rewards == 0) return;
 
         // Attempt transfer of rewards to the slashed account. Transfer failure reallocates funds to the owner.
@@ -713,8 +721,18 @@ contract STPV2 is
      */
     function curveDetail(
         uint8 curveId
-    ) external view returns (CurveParams memory curve) {
-        return _rewards.curves[curveId];
+    ) external view returns (CurveView memory curve) {
+        return
+            CurveView({
+                startTimestamp: _rewards.curves[curveId].startTimestamp,
+                numPeriods: _rewards.curves[curveId].numPeriods,
+                minMultiplier: _rewards.curves[curveId].minMultiplier,
+                decayRate: _rewards.curves[curveId].decayRate,
+                periodSeconds: _rewards.curves[curveId].periodSeconds,
+                currentMultiplier: RewardCurveLib.currentMultiplier(
+                    _rewards.curves[curveId]
+                )
+            });
     }
 
     /**

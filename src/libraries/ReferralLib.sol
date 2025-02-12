@@ -27,7 +27,7 @@ library ReferralLib {
 
     /// @dev Struct for holding details of a referral code
     struct Code {
-        /// @dev The percentage of the transfer to give to the referrer
+        /// @dev The percentage of the reward shares to give to the referrer
         uint16 basisPoints;
         /// @dev Whether this code can be updated once set (mutable or not)
         bool permanent;

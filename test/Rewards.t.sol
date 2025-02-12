@@ -171,10 +171,6 @@ contract RewardsTest is BaseTest {
         uint256 bobBalance = rbalance(bob);
         uint256 charlieBalance = rbalance(charlie);
 
-        console.log("doug", doug);
-        console.log("alice", alice);
-        console.log("aliceBalance", aliceBalance);
-
         stp.slash(alice);
         assertEq(alice.balance, aliceBalance);
 

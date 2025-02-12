@@ -6,6 +6,8 @@ import "./TestImports.t.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {STPV2Factory} from "src/STPV2Factory.sol";
 
+import "src/types/Constants.sol";
+
 contract FactoryTest is BaseTest {
     STPV2 internal impl;
     STPV2Factory internal factory;
@@ -56,7 +58,7 @@ contract FactoryTest is BaseTest {
         assertEq(stp.contractURI(), "curi");
         assertEq(stp.contractDetail().currency, address(0));
         assertEq(stp.owner(), creator);
-        assertEq(100, stp.feeDetail().protocolBps);
+        assertEq(PROTOCOL_FEE_BPS, stp.feeDetail().protocolBps);
         assertEq(400, stp.feeDetail().clientBps);
         assertEq(fees, stp.feeDetail().protocolRecipient);
         assertEq(fees, stp.feeDetail().clientRecipient);
@@ -92,7 +94,7 @@ contract FactoryTest is BaseTest {
         factory.setProtocolFeeRecipient(bob);
 
         assertEq(factory.feeSchedule().deployFee, 1e12);
-        assertEq(factory.feeSchedule().protocolFeeBps, 100);
+        assertEq(factory.feeSchedule().protocolFeeBps, PROTOCOL_FEE_BPS);
         assertEq(factory.feeSchedule().recipient, bob);
 
         factory.deploySubscription{value: 1e12}(defaultParams());

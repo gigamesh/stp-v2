@@ -33,7 +33,7 @@ contract RewardTestShim {
     }
 
     function issue(address _holder, uint256 numShares) external {
-        RewardPoolLib.issue(_state, _holder, numShares);
+        RewardPoolLib.issueShares(_state, _holder, numShares);
     }
 
     function issueWithCurve(
@@ -41,11 +41,11 @@ contract RewardTestShim {
         uint256 numShares,
         uint8 curveId
     ) external {
-        RewardPoolLib.issueWithCurve(_state, _holder, numShares, curveId);
+        RewardPoolLib.issueSharesWithCurve(_state, _holder, numShares, curveId);
     }
 
     function allocate(uint256 amount) external {
-        RewardPoolLib.allocate(_state, amount);
+        RewardPoolLib.allocateRewards(_state, amount);
     }
 
     function claimRewards(address account) external returns (uint256 amount) {
@@ -69,7 +69,7 @@ contract RewardTestShim {
     }
 
     function burn(address account) external {
-        RewardPoolLib.burn(_state, account);
+        RewardPoolLib.burnSharesClaimRewards(_state, account);
     }
 
     function state() external view returns (PoolStatePartial memory) {
