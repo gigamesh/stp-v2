@@ -17,23 +17,27 @@ contract FactoryTest is BaseTest {
     }
 
     function defaultParams() internal view returns (DeployParams memory) {
-        return DeployParams({
-            clientFeeBps: 400,
-            clientReferralShareBps: 0,
-            clientFeeRecipient: fees,
-            deployKey: "hello",
-            initParams: initParams,
-            tierParams: tierParams,
-            rewardParams: rewardParams,
-            curveParams: curveParams
-        });
+        return
+            DeployParams({
+                clientFeeBps: 400,
+                clientFeeRecipient: fees,
+                deployKey: "hello",
+                initParams: initParams,
+                tierParams: tierParams,
+                rewardParams: rewardParams,
+                curveParams: curveParams
+            });
     }
 
     function testInvalidFactory() public {
-        vm.expectRevert(abi.encodeWithSelector(STPV2Factory.InvalidFeeRecipient.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(STPV2Factory.InvalidFeeRecipient.selector)
+        );
         new STPV2Factory(address(impl), address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(STPV2Factory.InvalidImplementation.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(STPV2Factory.InvalidImplementation.selector)
+        );
         new STPV2Factory(address(0), fees);
     }
 
@@ -72,7 +76,9 @@ contract FactoryTest is BaseTest {
 
     function testDeployFeeTooLow() public {
         factory.setDeployFee(1e12);
-        vm.expectRevert(abi.encodeWithSelector(STPV2Factory.FeeInvalid.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(STPV2Factory.FeeInvalid.selector)
+        );
         factory.deploySubscription(defaultParams());
     }
 
@@ -94,7 +100,9 @@ contract FactoryTest is BaseTest {
     }
 
     function testBadFeeRecipient() public {
-        vm.expectRevert(abi.encodeWithSelector(STPV2Factory.InvalidFeeRecipient.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(STPV2Factory.InvalidFeeRecipient.selector)
+        );
         factory.setProtocolFeeRecipient(address(0));
     }
 
@@ -102,7 +110,9 @@ contract FactoryTest is BaseTest {
         factory.setDeployFee(1e12);
         factory.setProtocolFeeRecipient(address(this));
 
-        vm.expectRevert(abi.encodeWithSelector(SafeTransferLib.ETHTransferFailed.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeTransferLib.ETHTransferFailed.selector)
+        );
         factory.deploySubscription{value: 1e12}(defaultParams());
     }
 
@@ -115,12 +125,22 @@ contract FactoryTest is BaseTest {
     }
 
     function testUpdateProtocolFees() public {
-        address payable deployment = payable(factory.deploySubscription(defaultParams()));
+        address payable deployment = payable(
+            factory.deploySubscription(defaultParams())
+        );
         STPV2 stp = STPV2(deployment);
 
         bytes[] memory calls = new bytes[](2);
-        calls[0] = abi.encodeWithSelector(factory.updateClientFeeRecipient.selector, deployment, alice);
-        calls[1] = abi.encodeWithSelector(factory.updateProtocolFeeRecipient.selector, deployment, bob);
+        calls[0] = abi.encodeWithSelector(
+            factory.updateClientFeeRecipient.selector,
+            deployment,
+            alice
+        );
+        calls[1] = abi.encodeWithSelector(
+            factory.updateProtocolFeeRecipient.selector,
+            deployment,
+            bob
+        );
 
         vm.startPrank(fees);
         factory.multicall(calls);
@@ -129,10 +149,14 @@ contract FactoryTest is BaseTest {
         assertEq(stp.feeDetail().clientRecipient, alice);
         assertEq(stp.feeDetail().protocolRecipient, bob);
 
-        vm.expectRevert(abi.encodeWithSelector(AccessControlled.NotAuthorized.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(AccessControlled.NotAuthorized.selector)
+        );
         factory.updateClientFeeRecipient(deployment, fees);
 
-        vm.expectRevert(abi.encodeWithSelector(AccessControlled.NotAuthorized.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(AccessControlled.NotAuthorized.selector)
+        );
         factory.updateProtocolFeeRecipient(deployment, fees);
 
         vm.startPrank(alice);

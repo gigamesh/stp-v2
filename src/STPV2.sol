@@ -188,8 +188,7 @@ contract STPV2 is
             (fees.clientRecipient == address(0) && fees.clientBps > 0) ||
             (fees.protocolRecipient == address(0) && fees.protocolBps > 0) ||
             (fees.clientRecipient != address(0) && fees.clientBps == 0) ||
-            (fees.protocolRecipient != address(0) && fees.protocolBps == 0) ||
-            (fees.clientReferralBps > fees.clientBps)
+            (fees.protocolRecipient != address(0) && fees.protocolBps == 0)
         ) revert InvalidFeeParams();
 
         _contractURI = params.contractUri;

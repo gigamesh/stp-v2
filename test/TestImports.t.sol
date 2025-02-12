@@ -166,8 +166,7 @@ abstract contract BaseTest is Test {
             protocolRecipient: address(0),
             protocolBps: 0,
             clientRecipient: address(0),
-            clientBps: 0,
-            clientReferralBps: 0
+            clientBps: 0
         });
 
     RewardParams internal rewardParams =

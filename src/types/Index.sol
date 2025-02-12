@@ -62,8 +62,6 @@ struct FeeParams {
     uint16 protocolBps;
     /// @dev the client fee in basis points
     uint16 clientBps;
-    /// @dev the client determined referral cut in basis points
-    uint16 clientReferralBps;
     /// @dev the client fee recipient
     address clientRecipient;
 }
