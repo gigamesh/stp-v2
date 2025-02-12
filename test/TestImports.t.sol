@@ -17,7 +17,7 @@ import {AccessControlled} from "src/abstracts/AccessControlled.sol";
 import {IERC4906} from "src/interfaces/IERC4906.sol";
 import {Currency, CurrencyLib} from "src/libraries/CurrencyLib.sol";
 import {GateLib} from "src/libraries/GateLib.sol";
-import {ReferralLib} from "src/libraries/ReferralLib.sol";
+import {InviteLib} from "src/libraries/InviteLib.sol";
 import {RewardCurveLib} from "src/libraries/RewardCurveLib.sol";
 import {RewardPoolLib} from "src/libraries/RewardPoolLib.sol";
 

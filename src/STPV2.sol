@@ -12,7 +12,7 @@ import {ReentrancyGuard} from "@solady/utils/ReentrancyGuard.sol";
 import {AccessControlled} from "./abstracts/AccessControlled.sol";
 import {ERC721} from "./abstracts/ERC721.sol";
 import {Currency, CurrencyLib} from "./libraries/CurrencyLib.sol";
-import {ReferralLib} from "./libraries/ReferralLib.sol";
+import {InviteLib} from "./libraries/InviteLib.sol";
 import {RewardPoolLib} from "./libraries/RewardPoolLib.sol";
 import {RewardCurveLib} from "./libraries/RewardCurveLib.sol";
 import {SubscriberLib} from "./libraries/SubscriberLib.sol";
@@ -39,7 +39,7 @@ contract STPV2 is
     using SubscriberLib for Subscription;
     using CurrencyLib for Currency;
     using SubscriptionLib for SubscriptionLib.State;
-    using ReferralLib for ReferralLib.State;
+    using InviteLib for InviteLib.State;
     using RewardPoolLib for RewardPoolLib.State;
 
     //////////////////
@@ -83,11 +83,11 @@ contract STPV2 is
     /// @dev Emitted when the client fee recipient is updated
     event ClientFeeRecipientChange(address indexed account);
 
-    /// @dev Emitted when reward shares are granted to a referrer
-    event Referral(
+    /// @dev Emitted when reward shares are granted to a inviter
+    event Invite(
         uint256 indexed tokenId,
-        address indexed referrer,
-        uint256 indexed referralId,
+        address indexed inviter,
+        uint256 indexed inviteId,
         uint256 rewardShares
     );
 
@@ -141,8 +141,8 @@ contract STPV2 is
     /// @dev The subscription state (subscribers, tiers, etc)
     SubscriptionLib.State private _state;
 
-    /// @dev Referral codes and rewards
-    ReferralLib.State private _referrals;
+    /// @dev Invite codes and rewards
+    InviteLib.State private _invites;
 
     /// @dev The reward pool state (holders, balances, etc)
     RewardPoolLib.State private _rewards;
@@ -199,7 +199,7 @@ contract STPV2 is
         _symbol = params.symbol;
         _currency = Currency.wrap(params.currencyAddress);
         _state.supplyCap = params.globalSupplyCap;
-        _referrals.defaultBps = 1000;
+        _invites.defaultBps = 1000;
 
         _feeParams = fees;
         _rewardParams = rewards;
@@ -235,7 +235,7 @@ contract STPV2 is
 
     /**
      * @notice Mint a subscription with advanced settings
-     * @dev This is the advanced minting function, which allows for setting a specific tier, referral code, and referrer
+     * @dev This is the advanced minting function, which allows for setting a specific tier, invite code, and inviter
      * @param params the minting parameters
      */
     function mintAdvanced(MintParams calldata params) external payable {
@@ -243,7 +243,7 @@ contract STPV2 is
             params.recipient,
             params.tierId,
             params.purchaseValue,
-            params.referralCode
+            params.inviteCode
         );
     }
 
@@ -410,100 +410,98 @@ contract STPV2 is
     }
 
     /////////////////////////
-    // Referral Rewards
+    // Invite Rewards
     /////////////////////////
 
     /**
-     * @notice Create a custom referral code for giving rewards to referrers on mint
-     * @param code the unique integer code for the referral
+     * @notice Create a custom invite code for giving rewards to inviters on mint
+     * @param code the unique integer code for the invite
      * @param basisPoints the reward basis points (max = 50% = 5000 bps)
-     * @param permanent whether the referral code is locked (immutable after set)
+     * @param permanent whether the invite code is locked (immutable after set)
      * @param account the specific account to reward
      */
-    function createCustomReferralCode(
+    function createCustomInviteCode(
         uint256 code,
         uint16 basisPoints,
         bool permanent,
         address account
     ) external {
         _checkOwnerOrRoles(ROLE_MANAGER);
-        ReferralLib.Code memory referralInfo = _referrals.codes[code];
+        InviteLib.Code memory inviteInfo = _invites.codes[code];
 
         if (code < MIN_CUSTOM_REFERRAL_CODE)
-            revert ReferralLib.InvalidReferralCode();
+            revert InviteLib.InvalidInviteCode();
 
-        if (referralInfo.basisPoints != 0)
-            revert ReferralLib.CodeAlreadyExists();
+        if (inviteInfo.basisPoints != 0) revert InviteLib.CodeAlreadyExists();
 
-        _referrals.setReferral(
+        _invites.setInvite(
             code,
-            ReferralLib.Code(basisPoints, permanent, account)
+            InviteLib.Code(basisPoints, permanent, account)
         );
     }
 
     /**
-     * @notice Update an existing referral code
-     * @param code the unique integer code for the referral
+     * @notice Update an existing invite code
+     * @param code the unique integer code for the invite
      * @param basisPoints the reward basis points
      * @param account the specific account to reward
      */
-    function updateReferralCode(
+    function updateInviteCode(
         uint256 code,
         uint16 basisPoints,
         address account
     ) external {
-        ReferralLib.Code memory referralInfo = _referrals.codes[code];
+        InviteLib.Code memory inviteInfo = _invites.codes[code];
 
-        if (referralInfo.basisPoints == 0)
-            revert ReferralLib.NonExistantReferralCode();
+        if (inviteInfo.basisPoints == 0)
+            revert InviteLib.NonExistantInviteCode();
 
-        // Code Ids below the minimum custom referral code are reserved for
-        // default referral codes (subscription token IDs). The basis points for these codes can't
-        // be increased beyond the default referral basis points.
+        // Code Ids below the minimum custom invite code are reserved for
+        // default invite codes (subscription token IDs). The basis points for these codes can't
+        // be increased beyond the default invite basis points.
         if (
-            code < MIN_CUSTOM_REFERRAL_CODE &&
-            basisPoints > _referrals.defaultBps
+            code < MIN_CUSTOM_REFERRAL_CODE && basisPoints > _invites.defaultBps
         ) {
             revert InvalidBasisPoints();
         }
 
-        _referrals.setReferral(
+        _invites.setInvite(
             code,
-            ReferralLib.Code(basisPoints, referralInfo.permanent, account)
+            InviteLib.Code(basisPoints, inviteInfo.permanent, account)
         );
     }
 
     /**
-     * @notice Set the default referral reward basis points assigned to all subscribers
+     * @notice Set the default invite reward basis points assigned to all subscribers
      * @param bps the default reward basis points (max = 50% = 5000 bps)
      */
-    function setDefaultReferralBps(uint16 bps) external {
+    function setDefaultInviteBps(uint16 bps) external {
         _checkOwnerOrRoles(ROLE_MANAGER);
 
         if (bps > MAX_BPS) revert InvalidBasisPoints();
 
-        _referrals.defaultBps = bps;
+        _invites.defaultBps = bps;
 
-        emit ReferralLib.DefaultReferralBpsSet(bps);
+        emit InviteLib.DefaultInviteBpsSet(bps);
     }
 
     /**
-     * @notice Fetch the default referral basis points
-     * @return the default referral basis points
+     * @notice Fetch the default invite basis points
+     * @return the default invite basis points
      */
-    function defaultReferralBps() external view returns (uint16) {
-        return _referrals.defaultBps;
+    function defaultInviteBps() external view returns (uint16) {
+        return _invites.defaultBps;
     }
 
     /**
-     * @notice Fetch the reward basis points for a given referral code
-     * @param code the unique integer code for the referral
+     * @notice Fetch the reward basis points for a given invite code
+     * @param code the unique integer code for the invite
      * @return value the reward basis points and permanence
      */
-    function referralDetail(
+    function inviteDetail(
         uint256 code
-    ) external view returns (ReferralLib.Code memory value) {
-        return _referrals.codes[code];
+    ) external view returns (InviteLib.Code memory value) {
+        return _invites.codes[code];
     }
 
     ////////////////////////
@@ -515,27 +513,27 @@ contract STPV2 is
      * @param account the account to purchase the subscription for
      * @param tierId the tier id to purchase
      * @param numTokens the number of tokens to purchase
-     * @param referralCode the referral code to use
+     * @param inviteCode the invite code to use
      */
     function _purchase(
         address account,
         uint16 tierId,
         uint256 numTokens,
-        uint256 referralCode
+        uint256 inviteCode
     ) private nonReentrant {
         uint256 tokensIn = 0;
 
         Subscription storage sub = _state.subscriptions[account];
 
-        // This ensures the original referrer gets the lifetime referral cut
+        // This ensures the original inviter gets the lifetime invite cut
         // for subscriptions started with their code.
         if (
             // Check if subscription already exists
             sub.tokenId != 0
         ) {
             // Revert if provided code isn't null and doesn't match existing subscription's code
-            if (referralCode != 0 && referralCode != sub.referralCode) {
-                revert ReferralLib.InvalidReferralCode();
+            if (inviteCode != 0 && inviteCode != sub.inviteCode) {
+                revert InviteLib.InvalidInviteCode();
             }
         }
 
@@ -545,13 +543,13 @@ contract STPV2 is
         // Mint a new token if necessary
         uint256 tokenId = sub.tokenId;
         if (tokenId == 0) {
-            tokenId = _state.mint(account, referralCode);
+            tokenId = _state.mint(account, inviteCode);
             _safeMint(account, tokenId);
 
-            // Set tokenId as the default referral code for the new subscriber
-            _referrals.setReferral(
+            // Set tokenId as the default invite code for the new subscriber
+            _invites.setInvite(
                 uint256(tokenId),
-                ReferralLib.Code(_referrals.defaultBps, false, account)
+                InviteLib.Code(_invites.defaultBps, false, account)
             );
         }
         // Adding time to existing subscription
@@ -569,7 +567,7 @@ contract STPV2 is
         // Purchase the subscription (switching tiers if necessary)
         _state.purchase(account, tokensIn, tierId);
 
-        // Calculate client / referrer split if referral code isn't applicable
+        // Calculate client / inviter split if invite code isn't applicable
         uint16 clientBps = _feeParams.clientBps;
 
         // Transfer protocol + client fees
@@ -579,30 +577,17 @@ contract STPV2 is
             _feeParams.protocolRecipient
         ) + _transferFee(tokensIn, clientBps, _feeParams.clientRecipient));
 
-        ReferralLib.Code memory referralInfo = _referrals.codes[
-            sub.referralCode
-        ];
+        InviteLib.Code memory inviteInfo = _invites.codes[sub.inviteCode];
 
-        // Ensure user can't accidentally use a non-existent referral code
-        if (sub.referralCode > 0 && referralInfo.basisPoints == 0)
-            revert ReferralLib.NonExistantReferralCode();
+        // Ensure user can't accidentally use a non-existent invite code
+        if (sub.inviteCode > 0 && inviteInfo.basisPoints == 0)
+            revert InviteLib.NonExistantInviteCode();
 
         // Issue shares and allocate funds to reward pool
-        uint256 referrerTokens = (tokensIn * referralInfo.basisPoints) /
-            MAX_BPS;
-        uint256 subscriberTokens = tokensIn - referrerTokens;
+        uint256 inviterTokens = (tokensIn * inviteInfo.basisPoints) / MAX_BPS;
+        uint256 subscriberTokens = tokensIn - inviterTokens;
 
-        // console.log("tokensIn", tokensIn);
-        // console.log("referrer", referralInfo.referrer);
-        // console.log("bps", referralInfo.basisPoints);
-
-        // console.log(
-        //     "Referrer: %s, Subscriber: %s",
-        //     referrerRewardTokens,
-        //     subscriberRewardTokens
-        // );
-
-        _issueAndAllocateRewards(referralInfo.referrer, referrerTokens);
+        _issueAndAllocateRewards(inviteInfo.inviter, inviterTokens);
         _issueAndAllocateRewards(account, subscriberTokens);
     }
 
@@ -636,11 +621,6 @@ contract STPV2 is
         uint16 bps = _state.tiers[sub.tierId].params.rewardBasisPoints;
         uint8 curve = _state.tiers[sub.tierId].params.rewardCurveId;
         uint256 rewardTokens = (tokensIn * bps) / MAX_BPS;
-
-        // console.log("account", account);
-        // console.log("bps", bps);
-        // console.log("tokensIn", tokensIn);
-        // console.log("rewardTokens", rewardTokens);
 
         if (rewardTokens == 0) return;
 

@@ -71,7 +71,7 @@ contract TierSwitchingTest is BaseTest {
             MintParams({
                 tierId: 2,
                 recipient: alice,
-                referralCode: 0,
+                inviteCode: 0,
                 purchaseValue: 0.002 ether
             })
         );
@@ -88,7 +88,7 @@ contract TierSwitchingTest is BaseTest {
             MintParams({
                 tierId: 20,
                 recipient: alice,
-                referralCode: 0,
+                inviteCode: 0,
                 purchaseValue: 0.002 ether
             })
         );
@@ -99,7 +99,7 @@ contract TierSwitchingTest is BaseTest {
             MintParams({
                 tierId: 2,
                 recipient: alice,
-                referralCode: 0,
+                inviteCode: 0,
                 purchaseValue: 0.002 ether
             })
         );
@@ -107,7 +107,7 @@ contract TierSwitchingTest is BaseTest {
             MintParams({
                 tierId: 1,
                 recipient: alice,
-                referralCode: 0,
+                inviteCode: 0,
                 purchaseValue: 0.001 ether
             })
         );
