@@ -2,11 +2,12 @@
 pragma solidity ^0.8.20;
 
 import "../TestImports.t.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
-// We need to create a shim contract to call the internal functions of RewardPoolLib in order to get
-// foundry to generate the coverage report correctly
 contract RewardCurveTestShim {
-    function currentMultiplier(CurveParams memory params) external view returns (uint256 multiplier) {
+    function currentMultiplier(
+        CurveParams memory params
+    ) external view returns (uint256 multiplier) {
         return RewardCurveLib.currentMultiplier(params);
     }
 
@@ -14,14 +15,21 @@ contract RewardCurveTestShim {
 }
 
 contract RewardCurveLibTest is BaseTest {
+    using FixedPointMathLib for uint256;
+
     RewardCurveTestShim public shim = new RewardCurveTestShim();
 
-    // Call all methods iva RewardPoolLib.method so the coverage tool can track them
     function defaults() internal pure returns (CurveParams memory) {
-        return CurveParams({numPeriods: 6, periodSeconds: 86_400, startTimestamp: 0, minMultiplier: 0, formulaBase: 2});
+        // 50% decay per period (halves each period)
+        return
+            CurveParams({
+                numPeriods: 6,
+                decayRate: 50, // 50% decay per period
+                periodSeconds: 86_400,
+                startTimestamp: 0,
+                minMultiplier: 0
+            });
     }
-
-    /// Curve Tests ///
 
     function testNoDecay() public {
         CurveParams memory params = defaults();
@@ -35,9 +43,12 @@ contract RewardCurveLibTest is BaseTest {
 
     function testSinglePeriod() public {
         CurveParams memory params = defaults();
-        assertEq(shim.currentMultiplier(params), 64);
+        // Initial: Should be 100%
+        assertEq(shim.currentMultiplier(params), 100);
+
+        // After 1 period: Should decay by 50%
         vm.warp(block.timestamp + 1 + 1 days);
-        assertEq(shim.currentMultiplier(params), 32);
+        assertEq(shim.currentMultiplier(params), 50);
     }
 
     function testZeroMin() public {
@@ -56,33 +67,55 @@ contract RewardCurveLibTest is BaseTest {
 
     function testMinMultiplierIsMin() public {
         CurveParams memory params = defaults();
-        params.minMultiplier = 16;
+        params.minMultiplier = 3;
+
         vm.warp(block.timestamp + 2 days);
-        assertEq(shim.currentMultiplier(params), 16);
-        vm.warp(block.timestamp + 1 days);
-        assertEq(shim.currentMultiplier(params), 16);
-        vm.warp(block.timestamp + 365 days);
-        assertEq(shim.currentMultiplier(params), 16);
+        assertEq(shim.currentMultiplier(params), 25); // 50% decay twice
+        vm.warp(block.timestamp + 7 days);
+        assertEq(shim.currentMultiplier(params), params.minMultiplier);
     }
 
-    function testZeroPeriods() public {
-        CurveParams memory params = defaults();
-        params.numPeriods = 0;
-        assertEq(shim.currentMultiplier(params), 0);
-    }
+    function testFuzzDecay(uint16 numPeriods) public {
+        vm.assume(numPeriods > 0);
 
-    function testFuzzDecay(uint8 periods) public {
-        vm.assume(periods > 0);
-        vm.assume(periods <= 64);
+        // This has been tested with RewardCurveLib.MAX_PERIODS but it's too slow.
+        // Most subscriptions will have < 100 periods
+        vm.assume(numPeriods <= 100);
 
         CurveParams memory params = defaults();
-        params.numPeriods = periods;
+        params.numPeriods = numPeriods;
         uint256 start = block.timestamp;
-        for (uint256 i = 0; i <= params.numPeriods; i++) {
-            vm.warp(start + (params.periodSeconds * i) + 1);
-            assertEq(shim.currentMultiplier(params), (2 ** (params.numPeriods - i)));
+
+        // Calculate base rate for decay
+        uint256 baseRate = ((100 - params.decayRate) * RewardCurveLib.WAD) /
+            100;
+
+        for (uint256 period = 0; period < params.numPeriods; period++) {
+            vm.warp(start + (params.periodSeconds * period));
+
+            // Calculate expected value
+            uint256 expected = baseRate.rpow(period, RewardCurveLib.WAD);
+            expected =
+                (expected * RewardCurveLib.SCALE_FACTOR) /
+                RewardCurveLib.WAD;
+
+            assertEq(shim.currentMultiplier(params), expected);
         }
+
         vm.warp(start + (params.periodSeconds * (params.numPeriods + 1)) + 1);
         assertEq(shim.currentMultiplier(params), params.minMultiplier);
+    }
+
+    function testDecayRateBoundaries() public {
+        CurveParams memory params = defaults();
+
+        // Test 0% decay
+        params.decayRate = 0;
+        assertEq(shim.currentMultiplier(params), RewardCurveLib.SCALE_FACTOR); // Stays at 100%
+
+        // Test 100% decay
+        params.decayRate = 100;
+        vm.warp(block.timestamp + params.periodSeconds);
+        assertEq(shim.currentMultiplier(params), 0); // Complete decay
     }
 }

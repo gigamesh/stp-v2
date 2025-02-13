@@ -80,7 +80,9 @@ contract STPV2Factory is AccessControlled, Multicallable {
      *
      * @param params the initialization parameters for the contract (@see DeloyParams)
      */
-    function deploySubscription(DeployParams memory params) public payable returns (address) {
+    function deploySubscription(
+        DeployParams memory params
+    ) public payable returns (address) {
         // Transfer the deploy fee if required
         _transferDeployFee();
 
@@ -88,19 +90,23 @@ contract STPV2Factory is AccessControlled, Multicallable {
         address deployment = LibClone.clone(IMPLEMENTATION);
 
         // Set the owner to the sender if it is not set
-        if (params.initParams.owner == address(0)) params.initParams.owner = msg.sender;
+        if (params.initParams.owner == address(0))
+            params.initParams.owner = msg.sender;
 
         FeeParams memory subFees = FeeParams({
             protocolRecipient: _protocolFeeRecipient,
             protocolBps: PROTOCOL_FEE_BPS,
             clientRecipient: params.clientFeeRecipient,
-            clientBps: params.clientFeeBps,
-            clientReferralBps: params.clientReferralShareBps
+            clientBps: params.clientFeeBps
         });
 
         emit Deployment(deployment, params.deployKey);
         STPV2(payable(deployment)).initialize(
-            params.initParams, params.tierParams, params.rewardParams, params.curveParams, subFees
+            params.initParams,
+            params.tierParams,
+            params.rewardParams,
+            params.curveParams,
+            subFees
         );
 
         return deployment;
@@ -143,9 +149,17 @@ contract STPV2Factory is AccessControlled, Multicallable {
      * @notice Get the current fee schedule
      * @return schedule the fee schedule
      */
-    function feeSchedule() external view returns (FeeScheduleView memory schedule) {
+    function feeSchedule()
+        external
+        view
+        returns (FeeScheduleView memory schedule)
+    {
         return
-            FeeScheduleView({deployFee: _deployFee, protocolFeeBps: PROTOCOL_FEE_BPS, recipient: _protocolFeeRecipient});
+            FeeScheduleView({
+                deployFee: _deployFee,
+                protocolFeeBps: PROTOCOL_FEE_BPS,
+                recipient: _protocolFeeRecipient
+            });
     }
 
     /**
@@ -154,8 +168,12 @@ contract STPV2Factory is AccessControlled, Multicallable {
      * @param deployment the deployment to update
      * @param recipient the new recipient
      */
-    function updateClientFeeRecipient(address payable deployment, address recipient) external {
-        if (STPV2(deployment).feeDetail().clientRecipient != msg.sender) revert NotAuthorized();
+    function updateClientFeeRecipient(
+        address payable deployment,
+        address recipient
+    ) external {
+        if (STPV2(deployment).feeDetail().clientRecipient != msg.sender)
+            revert NotAuthorized();
         STPV2(deployment).updateClientFeeRecipient(recipient);
     }
 
@@ -165,8 +183,12 @@ contract STPV2Factory is AccessControlled, Multicallable {
      * @param deployment the deployment to update
      * @param recipient the new recipient
      */
-    function updateProtocolFeeRecipient(address payable deployment, address recipient) external {
-        if (STPV2(deployment).feeDetail().protocolRecipient != msg.sender) revert NotAuthorized();
+    function updateProtocolFeeRecipient(
+        address payable deployment,
+        address recipient
+    ) external {
+        if (STPV2(deployment).feeDetail().protocolRecipient != msg.sender)
+            revert NotAuthorized();
         STPV2(deployment).updateProtocolFeeRecipient(recipient);
     }
 }

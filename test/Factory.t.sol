@@ -6,6 +6,8 @@ import "./TestImports.t.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {STPV2Factory} from "src/STPV2Factory.sol";
 
+import "src/types/Constants.sol";
+
 contract FactoryTest is BaseTest {
     STPV2 internal impl;
     STPV2Factory internal factory;
@@ -17,23 +19,27 @@ contract FactoryTest is BaseTest {
     }
 
     function defaultParams() internal view returns (DeployParams memory) {
-        return DeployParams({
-            clientFeeBps: 400,
-            clientReferralShareBps: 0,
-            clientFeeRecipient: fees,
-            deployKey: "hello",
-            initParams: initParams,
-            tierParams: tierParams,
-            rewardParams: rewardParams,
-            curveParams: curveParams
-        });
+        return
+            DeployParams({
+                clientFeeBps: 400,
+                clientFeeRecipient: fees,
+                deployKey: "hello",
+                initParams: initParams,
+                tierParams: tierParams,
+                rewardParams: rewardParams,
+                curveParams: curveParams
+            });
     }
 
     function testInvalidFactory() public {
-        vm.expectRevert(abi.encodeWithSelector(STPV2Factory.InvalidFeeRecipient.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(STPV2Factory.InvalidFeeRecipient.selector)
+        );
         new STPV2Factory(address(impl), address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(STPV2Factory.InvalidImplementation.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(STPV2Factory.InvalidImplementation.selector)
+        );
         new STPV2Factory(address(0), fees);
     }
 
@@ -52,7 +58,7 @@ contract FactoryTest is BaseTest {
         assertEq(stp.contractURI(), "curi");
         assertEq(stp.contractDetail().currency, address(0));
         assertEq(stp.owner(), creator);
-        assertEq(100, stp.feeDetail().protocolBps);
+        assertEq(PROTOCOL_FEE_BPS, stp.feeDetail().protocolBps);
         assertEq(400, stp.feeDetail().clientBps);
         assertEq(fees, stp.feeDetail().protocolRecipient);
         assertEq(fees, stp.feeDetail().clientRecipient);
@@ -72,7 +78,9 @@ contract FactoryTest is BaseTest {
 
     function testDeployFeeTooLow() public {
         factory.setDeployFee(1e12);
-        vm.expectRevert(abi.encodeWithSelector(STPV2Factory.FeeInvalid.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(STPV2Factory.FeeInvalid.selector)
+        );
         factory.deploySubscription(defaultParams());
     }
 
@@ -86,7 +94,7 @@ contract FactoryTest is BaseTest {
         factory.setProtocolFeeRecipient(bob);
 
         assertEq(factory.feeSchedule().deployFee, 1e12);
-        assertEq(factory.feeSchedule().protocolFeeBps, 100);
+        assertEq(factory.feeSchedule().protocolFeeBps, PROTOCOL_FEE_BPS);
         assertEq(factory.feeSchedule().recipient, bob);
 
         factory.deploySubscription{value: 1e12}(defaultParams());
@@ -94,7 +102,9 @@ contract FactoryTest is BaseTest {
     }
 
     function testBadFeeRecipient() public {
-        vm.expectRevert(abi.encodeWithSelector(STPV2Factory.InvalidFeeRecipient.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(STPV2Factory.InvalidFeeRecipient.selector)
+        );
         factory.setProtocolFeeRecipient(address(0));
     }
 
@@ -102,7 +112,9 @@ contract FactoryTest is BaseTest {
         factory.setDeployFee(1e12);
         factory.setProtocolFeeRecipient(address(this));
 
-        vm.expectRevert(abi.encodeWithSelector(SafeTransferLib.ETHTransferFailed.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeTransferLib.ETHTransferFailed.selector)
+        );
         factory.deploySubscription{value: 1e12}(defaultParams());
     }
 
@@ -115,12 +127,22 @@ contract FactoryTest is BaseTest {
     }
 
     function testUpdateProtocolFees() public {
-        address payable deployment = payable(factory.deploySubscription(defaultParams()));
+        address payable deployment = payable(
+            factory.deploySubscription(defaultParams())
+        );
         STPV2 stp = STPV2(deployment);
 
         bytes[] memory calls = new bytes[](2);
-        calls[0] = abi.encodeWithSelector(factory.updateClientFeeRecipient.selector, deployment, alice);
-        calls[1] = abi.encodeWithSelector(factory.updateProtocolFeeRecipient.selector, deployment, bob);
+        calls[0] = abi.encodeWithSelector(
+            factory.updateClientFeeRecipient.selector,
+            deployment,
+            alice
+        );
+        calls[1] = abi.encodeWithSelector(
+            factory.updateProtocolFeeRecipient.selector,
+            deployment,
+            bob
+        );
 
         vm.startPrank(fees);
         factory.multicall(calls);
@@ -129,10 +151,14 @@ contract FactoryTest is BaseTest {
         assertEq(stp.feeDetail().clientRecipient, alice);
         assertEq(stp.feeDetail().protocolRecipient, bob);
 
-        vm.expectRevert(abi.encodeWithSelector(AccessControlled.NotAuthorized.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(AccessControlled.NotAuthorized.selector)
+        );
         factory.updateClientFeeRecipient(deployment, fees);
 
-        vm.expectRevert(abi.encodeWithSelector(AccessControlled.NotAuthorized.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(AccessControlled.NotAuthorized.selector)
+        );
         factory.updateProtocolFeeRecipient(deployment, fees);
 
         vm.startPrank(alice);

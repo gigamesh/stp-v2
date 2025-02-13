@@ -62,8 +62,6 @@ struct FeeParams {
     uint16 protocolBps;
     /// @dev the client fee in basis points
     uint16 clientBps;
-    /// @dev the client determined referral cut in basis points
-    uint16 clientReferralBps;
     /// @dev the client fee recipient
     address clientRecipient;
 }
@@ -96,6 +94,8 @@ struct Subscription {
     uint48 expiresAt;
     /// @dev The tokenId for the subscription
     uint64 tokenId;
+    /// @dev The inviter token id used to create the subscription
+    uint256 inviterId;
 }
 
 /// @dev The advanced parameters for minting a subscription
@@ -104,10 +104,8 @@ struct MintParams {
     uint16 tierId;
     /// @dev The address of the recipient (token holder)
     address recipient;
-    /// @dev The address of the referrer (reward recipient)
-    address referrer;
-    /// @dev The referral code
-    uint256 referralCode;
+    /// @dev The inviter token id
+    uint256 inviterId;
     /// @dev The number of tokens being transferred
     uint256 purchaseValue;
 }

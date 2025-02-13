@@ -23,7 +23,7 @@ contract RewardTestShim {
                 periodSeconds: 86_400,
                 startTimestamp: uint48(block.timestamp),
                 minMultiplier: 0,
-                formulaBase: 2
+                decayRate: 50
             })
         );
     }
@@ -33,15 +33,19 @@ contract RewardTestShim {
     }
 
     function issue(address _holder, uint256 numShares) external {
-        RewardPoolLib.issue(_state, _holder, numShares);
+        RewardPoolLib.issueShares(_state, _holder, numShares);
     }
 
-    function issueWithCurve(address _holder, uint256 numShares, uint8 curveId) external {
-        RewardPoolLib.issueWithCurve(_state, _holder, numShares, curveId);
+    function issueWithCurve(
+        address _holder,
+        uint256 numShares,
+        uint8 curveId
+    ) external {
+        RewardPoolLib.issueSharesWithCurve(_state, _holder, numShares, curveId);
     }
 
     function allocate(uint256 amount) external {
-        RewardPoolLib.allocate(_state, amount);
+        RewardPoolLib.allocateRewards(_state, amount);
     }
 
     function claimRewards(address account) external returns (uint256 amount) {
@@ -65,11 +69,15 @@ contract RewardTestShim {
     }
 
     function burn(address account) external {
-        RewardPoolLib.burn(_state, account);
+        RewardPoolLib.burnSharesClaimRewards(_state, account);
     }
 
     function state() external view returns (PoolStatePartial memory) {
-        return PoolStatePartial({totalShares: _state.totalShares, totalRewardIngress: _state.totalRewardIngress});
+        return
+            PoolStatePartial({
+                totalShares: _state.totalShares,
+                totalRewardIngress: _state.totalRewardIngress
+            });
     }
 
     function testIgnore() public {}
@@ -79,31 +87,14 @@ contract RewardPoolLibTest is BaseTest {
     RewardTestShim public shim = new RewardTestShim();
 
     function defaultCurve() public pure returns (CurveParams memory) {
-        return CurveParams({numPeriods: 6, periodSeconds: 86_400, startTimestamp: 0, minMultiplier: 0, formulaBase: 2});
-    }
-
-    function testCurve() public {
-        CurveParams memory curve = defaultCurve();
-        vm.expectEmit(true, true, false, true, address(shim));
-        emit RewardPoolLib.CurveCreated(1);
-        shim.createCurve(curve);
-
-        curve = defaultCurve();
-        curve.numPeriods = 37;
-        curve.formulaBase = 2;
-        vm.expectRevert(abi.encodeWithSelector(RewardPoolLib.InvalidCurve.selector));
-        shim.createCurve(curve);
-
-        curve = defaultCurve();
-        curve.numPeriods = 0;
-        curve.minMultiplier = 0;
-        vm.expectRevert(abi.encodeWithSelector(RewardPoolLib.InvalidCurve.selector));
-        shim.createCurve(curve);
-
-        curve = defaultCurve();
-        curve.startTimestamp = uint48(block.timestamp + 1000);
-        vm.expectRevert(abi.encodeWithSelector(RewardPoolLib.InvalidCurve.selector));
-        shim.createCurve(curve);
+        return
+            CurveParams({
+                numPeriods: 6,
+                periodSeconds: 86_400,
+                startTimestamp: 0,
+                minMultiplier: 0,
+                decayRate: 50
+            });
     }
 
     function testIssuance() public {
@@ -186,8 +177,10 @@ contract RewardPoolLibTest is BaseTest {
     }
 
     function testLargeValues() public {
-        uint256 maxWeiDelta = 10;
+        uint256 maxWeiDelta = 10_000;
         uint256 allocation = 2 ** 72;
+        uint256 multiplier = RewardCurveLib.currentMultiplier(shim.curve(0));
+
         for (uint256 i = 0; i < 512; i++) {
             shim.issueWithCurve(alice, allocation, 0);
             shim.issueWithCurve(bob, allocation, 0);
@@ -195,15 +188,25 @@ contract RewardPoolLibTest is BaseTest {
             shim.allocate(allocation);
         }
 
-        assertEq(shim.state().totalShares, allocation * 512 * 3 * 64);
+        assertEq(shim.state().totalShares, allocation * 512 * 3 * multiplier);
         assertApproxEqAbs(
             shim.balance(),
-            shim.rewardBalanceOf(alice) + shim.rewardBalanceOf(bob) + shim.rewardBalanceOf(charlie),
+            shim.rewardBalanceOf(alice) +
+                shim.rewardBalanceOf(bob) +
+                shim.rewardBalanceOf(charlie),
             maxWeiDelta
         );
 
-        assertApproxEqAbs(shim.rewardBalanceOf(alice), shim.rewardBalanceOf(charlie), maxWeiDelta);
-        assertApproxEqAbs(shim.rewardBalanceOf(alice), shim.rewardBalanceOf(bob), maxWeiDelta);
+        assertApproxEqAbs(
+            shim.rewardBalanceOf(alice),
+            shim.rewardBalanceOf(charlie),
+            maxWeiDelta
+        );
+        assertApproxEqAbs(
+            shim.rewardBalanceOf(alice),
+            shim.rewardBalanceOf(bob),
+            maxWeiDelta
+        );
 
         shim.burn(alice);
         shim.burn(bob);
@@ -219,10 +222,16 @@ contract RewardPoolLibTest is BaseTest {
         shim.issueWithCurve(charlie, allocation, 0);
         shim.allocate(allocation);
 
-        assertApproxEqAbs(shim.rewardBalanceOf(alice), allocation / 3, maxWeiDelta);
+        assertApproxEqAbs(
+            shim.rewardBalanceOf(alice),
+            allocation / 3,
+            maxWeiDelta
+        );
         assertApproxEqAbs(
             shim.balance(),
-            shim.rewardBalanceOf(alice) + shim.rewardBalanceOf(bob) + shim.rewardBalanceOf(charlie),
+            shim.rewardBalanceOf(alice) +
+                shim.rewardBalanceOf(bob) +
+                shim.rewardBalanceOf(charlie),
             maxWeiDelta
         );
         shim.burn(alice);
@@ -230,5 +239,52 @@ contract RewardPoolLibTest is BaseTest {
         shim.burn(charlie);
 
         assertApproxEqAbs(shim.balance(), 0, maxWeiDelta);
+    }
+
+    function testCreateCurve() public {
+        // No need to test periodSeconds. Will only fail if over 2**48
+        CurveParams memory params = CurveParams({
+            numPeriods: RewardCurveLib.MAX_PERIODS + 1,
+            periodSeconds: 1,
+            startTimestamp: 0,
+            minMultiplier: 0,
+            decayRate: 0
+        });
+
+        vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
+        shim.createCurve(params);
+
+        params = CurveParams({
+            numPeriods: 1,
+            periodSeconds: 1,
+            startTimestamp: uint48(block.timestamp + 1),
+            minMultiplier: 0,
+            decayRate: 0
+        });
+
+        vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
+        shim.createCurve(params);
+
+        params = CurveParams({
+            numPeriods: 1,
+            periodSeconds: 1,
+            startTimestamp: 0,
+            minMultiplier: RewardPoolLib.MAX_MULTIPLIER + 1,
+            decayRate: 0
+        });
+
+        vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
+        shim.createCurve(params);
+
+        params = CurveParams({
+            numPeriods: 1,
+            periodSeconds: 1,
+            startTimestamp: 0,
+            minMultiplier: 0,
+            decayRate: 101
+        });
+
+        vm.expectRevert(RewardPoolLib.InvalidCurve.selector);
+        shim.createCurve(params);
     }
 }

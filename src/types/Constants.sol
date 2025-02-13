@@ -9,11 +9,8 @@ uint16 constant MAX_BPS = 10_000;
 /// @dev The maximum fee in basis points
 uint16 constant MAX_FEE_BPS = 1250;
 
-/// @dev The maximum referral bonus in basis points
-uint16 constant MAX_REFERRAL_BPS = 5000;
-
 /// @dev The protocol fee in basis points
-uint16 constant PROTOCOL_FEE_BPS = 100;
+uint16 constant PROTOCOL_FEE_BPS = 50;
 
 /// @dev The deploy fee currency (ETH)
 Currency constant DEPLOY_FEE_CURRENCY = Currency.wrap(address(0));

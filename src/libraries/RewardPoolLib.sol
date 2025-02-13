@@ -65,7 +65,7 @@ library RewardPoolLib {
     uint256 private constant PRECISION_FACTOR = 2 ** 96;
 
     /// @dev The maximum reward factor (this limits overflow probability)
-    uint256 private constant MAX_MULTIPLIER = 2 ** 36;
+    uint256 public constant MAX_MULTIPLIER = 2 ** 36;
 
     /////////////////////
     // EVENTS
@@ -106,11 +106,19 @@ library RewardPoolLib {
     error InvalidHolder();
 
     /// @dev Create a new reward curve (starting at id 0)
-    function createCurve(State storage state, CurveParams memory curve) internal {
-        if (curve.startTimestamp == 0) curve.startTimestamp = uint48(block.timestamp);
-        if (curve.numPeriods == 0 && curve.minMultiplier == 0) revert InvalidCurve();
-        if (curve.startTimestamp > block.timestamp) revert InvalidCurve();
-        if (curve.currentMultiplier() > MAX_MULTIPLIER) revert InvalidCurve();
+    function createCurve(
+        State storage state,
+        CurveParams memory curve
+    ) internal {
+        if (curve.startTimestamp == 0)
+            curve.startTimestamp = uint48(block.timestamp);
+        if (
+            (curve.numPeriods == 0 && curve.minMultiplier == 0) ||
+            curve.startTimestamp > block.timestamp ||
+            curve.minMultiplier > MAX_MULTIPLIER ||
+            curve.numPeriods > RewardCurveLib.MAX_PERIODS ||
+            curve.decayRate > 100 // Can't decay more than 100%
+        ) revert InvalidCurve();
 
         // curve.validate();
         emit CurveCreated(state.numCurves);
@@ -118,30 +126,51 @@ library RewardPoolLib {
     }
 
     /// @dev Issue shares to a holder
-    function issue(State storage state, address holder, uint256 numShares) internal {
+    function issueShares(
+        State storage state,
+        address holder,
+        uint256 numShares
+    ) internal {
         if (numShares == 0) return;
         if (holder == address(0)) revert InvalidHolder();
         state.totalShares += numShares;
         state.holders[holder].numShares += numShares;
-        state.holders[holder].pointsCorrection -= (state.pointsPerShare * numShares).toInt256();
+        state.holders[holder].pointsCorrection -= (state.pointsPerShare *
+            numShares).toInt256();
         emit SharesIssued(holder, numShares);
     }
 
     /// @dev Issue shares to a holder with a curve multiplier
-    function issueWithCurve(State storage state, address holder, uint256 numShares, uint8 curveId) internal {
-        state.issue(holder, numShares * state.curves[curveId].currentMultiplier());
+    function issueSharesWithCurve(
+        State storage state,
+        address holder,
+        uint256 numShares,
+        uint8 curveId
+    ) internal {
+        state.issueShares(
+            holder,
+            numShares * state.curves[curveId].currentMultiplier()
+        );
     }
 
     /// @dev Allocate rewards to the pool for holders to claim (capture should be done separately)
-    function allocate(State storage state, uint256 amount) internal {
+    function allocateRewards(
+        State storage state,
+        uint256 rewardTokens
+    ) internal {
         if (state.totalShares == 0) revert AllocationWithoutShares();
-        state.pointsPerShare += (amount * PRECISION_FACTOR) / state.totalShares;
-        state.totalRewardIngress += amount;
-        emit RewardsAllocated(amount);
+        state.pointsPerShare +=
+            (rewardTokens * PRECISION_FACTOR) /
+            state.totalShares;
+        state.totalRewardIngress += rewardTokens;
+        emit RewardsAllocated(rewardTokens);
     }
 
     /// @dev Claim rewards for a holder (transfer should be done separately)
-    function claimRewards(State storage state, address account) internal returns (uint256 amount) {
+    function claimRewards(
+        State storage state,
+        address account
+    ) internal returns (uint256 amount) {
         amount = state.rewardBalanceOf(account);
         if (amount == 0) revert NoRewardsToClaim();
         state.holders[account].rewardsWithdrawn += amount;
@@ -150,17 +179,25 @@ library RewardPoolLib {
     }
 
     /// @dev Calculate the reward balance of a holder
-    function rewardBalanceOf(State storage state, address account) internal view returns (uint256) {
+    function rewardBalanceOf(
+        State storage state,
+        address account
+    ) internal view returns (uint256) {
         if (state.totalShares == 0) return 0;
         Holder memory holder = state.holders[account];
-        uint256 exposure =
-            uint256((state.pointsPerShare * holder.numShares).toInt256() + holder.pointsCorrection) / PRECISION_FACTOR;
+        uint256 exposure = uint256(
+            (state.pointsPerShare * holder.numShares).toInt256() +
+                holder.pointsCorrection
+        ) / PRECISION_FACTOR;
         return exposure - holder.rewardsWithdrawn;
     }
 
     /// @dev Claim rewards and burn shares of a holder.
     ///      Note: Ensure the caller transfers the reward amount to the holder
-    function burn(State storage state, address account) internal returns (uint256 transferAmount) {
+    function burnSharesClaimRewards(
+        State storage state,
+        address account
+    ) internal returns (uint256 transferAmount) {
         uint256 numShares = state.holders[account].numShares;
         if (numShares == 0) revert NoSharesToBurn();
         if (state.rewardBalanceOf(account) > 0) {

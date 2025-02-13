@@ -45,3 +45,18 @@ struct ContractView {
     /// @dev whether the pool is slashable
     bool rewardSlashable;
 }
+
+struct CurveView {
+    /// @dev the number of periods for which rewards are paid
+    uint16 numPeriods;
+    /// @dev The decay rate per period (1 = 1% decay, 50 = 50% decay)
+    uint8 decayRate;
+    /// @dev the period duration in seconds
+    uint48 periodSeconds;
+    /// @dev the start timestamp for rewards
+    uint48 startTimestamp;
+    /// @dev the minimum multiplier for rewards (in basis points)
+    uint256 minMultiplier;
+    /// @dev The current multiplier
+    uint256 currentMultiplier;
+}
