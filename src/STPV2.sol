@@ -518,15 +518,17 @@ contract STPV2 is
         // Purchase the subscription (switching tiers if necessary)
         _state.purchase(account, tokensIn, tierId);
 
-        // Calculate client / inviter split if inviter token id isn't applicable
-        uint16 clientBps = _feeParams.clientBps;
-
         // Transfer protocol + client fees
         tokensIn -= (_transferFee(
             tokensIn,
             _feeParams.protocolBps,
             _feeParams.protocolRecipient
-        ) + _transferFee(tokensIn, clientBps, _feeParams.clientRecipient));
+        ) +
+            _transferFee(
+                tokensIn,
+                _feeParams.clientBps,
+                _feeParams.clientRecipient
+            ));
 
         // Issue shares and allocate funds to reward pool
         uint256 inviterTokens = (tokensIn * _invites.bps) / MAX_BPS;
@@ -536,9 +538,9 @@ contract STPV2 is
 
         if (inviter_ == address(0)) {
             // Ensure user can't accidentally try to use a non-existent inviter id
-            if (sub.inviterId > 0) revert InviteLib.NonExistantInviter();
+            if (inviterId > 0) revert InviteLib.NonExistantInviter();
 
-            // If no inviter, the protocol gets the inviter's cut
+            // If no inviter, the protocol gets the inviter cut
             _allocateRewardsForNullInviter(
                 _state.tiers[sub.tierId].params.rewardBasisPoints,
                 inviterTokens

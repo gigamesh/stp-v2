@@ -177,4 +177,21 @@ contract InviteTests is BaseTest {
             aliceSharesBefore + expectedIncrease * 3
         );
     }
+
+    function testNonExistantInviter() public {
+        vm.startPrank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(InviteLib.NonExistantInviter.selector)
+        );
+        stp.mintAdvanced{value: tierParams.pricePerPeriod}(
+            MintParams({
+                tierId: 1,
+                recipient: bob,
+                inviterId: 123,
+                purchaseValue: tierParams.pricePerPeriod
+            })
+        );
+
+        vm.stopPrank();
+    }
 }
