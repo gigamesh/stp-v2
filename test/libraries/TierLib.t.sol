@@ -157,7 +157,7 @@ contract TierLibTest is Test {
             purchaseExpires: 0,
             grantExpires: 0,
             expiresAt: 0,
-            inviteCode: 0
+            inviterId: 0
         });
 
         // All good

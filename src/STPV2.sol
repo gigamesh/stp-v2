@@ -199,7 +199,7 @@ contract STPV2 is
         _symbol = params.symbol;
         _currency = Currency.wrap(params.currencyAddress);
         _state.supplyCap = params.globalSupplyCap;
-        _invites.defaultBps = 1000;
+        _invites.bps = 1000;
 
         _feeParams = fees;
         _rewardParams = rewards;
@@ -235,7 +235,7 @@ contract STPV2 is
 
     /**
      * @notice Mint a subscription with advanced settings
-     * @dev This is the advanced minting function, which allows for setting a specific tier, invite code, and inviter
+     * @dev This is the advanced minting function, which allows for setting a specific tier, inviter token id, and inviter
      * @param params the minting parameters
      */
     function mintAdvanced(MintParams calldata params) external payable {
@@ -243,7 +243,7 @@ contract STPV2 is
             params.recipient,
             params.tierId,
             params.purchaseValue,
-            params.inviteCode
+            params.inviterId
         );
     }
 
@@ -414,94 +414,47 @@ contract STPV2 is
     /////////////////////////
 
     /**
-     * @notice Create a custom invite code for giving rewards to inviters on mint
-     * @param code the unique integer code for the invite
-     * @param basisPoints the reward basis points (max = 50% = 5000 bps)
-     * @param permanent whether the invite code is locked (immutable after set)
+     * @notice Update an existing inviter token id
+     * @param inviterId the inviter's subscription token ID
      * @param account the specific account to reward
      */
-    function createCustomInviteCode(
-        uint256 code,
-        uint16 basisPoints,
-        bool permanent,
-        address account
-    ) external {
-        _checkOwnerOrRoles(ROLE_MANAGER);
-        InviteLib.Code memory inviteInfo = _invites.codes[code];
+    function updateInviter(uint256 inviterId, address account) external {
+        address inviter_ = _invites.inviters[inviterId];
 
-        if (code < MIN_CUSTOM_REFERRAL_CODE)
-            revert InviteLib.InvalidInviteCode();
+        if (inviter_ == address(0)) revert InviteLib.NonExistantInviter();
 
-        if (inviteInfo.basisPoints != 0) revert InviteLib.CodeAlreadyExists();
-
-        _invites.setInvite(
-            code,
-            InviteLib.Code(basisPoints, permanent, account)
-        );
-    }
-
-    /**
-     * @notice Update an existing invite code
-     * @param code the unique integer code for the invite
-     * @param basisPoints the reward basis points
-     * @param account the specific account to reward
-     */
-    function updateInviteCode(
-        uint256 code,
-        uint16 basisPoints,
-        address account
-    ) external {
-        InviteLib.Code memory inviteInfo = _invites.codes[code];
-
-        if (inviteInfo.basisPoints == 0)
-            revert InviteLib.NonExistantInviteCode();
-
-        // Code Ids below the minimum custom invite code are reserved for
-        // default invite codes (subscription token IDs). The basis points for these codes can't
-        // be increased beyond the default invite basis points.
-        if (
-            code < MIN_CUSTOM_REFERRAL_CODE && basisPoints > _invites.defaultBps
-        ) {
-            revert InvalidBasisPoints();
-        }
-
-        _invites.setInvite(
-            code,
-            InviteLib.Code(basisPoints, inviteInfo.permanent, account)
-        );
+        _invites.setInviter(inviterId, account);
     }
 
     /**
      * @notice Set the default invite reward basis points assigned to all subscribers
      * @param bps the default reward basis points (max = 50% = 5000 bps)
      */
-    function setDefaultInviteBps(uint16 bps) external {
+    function setInviteBps(uint16 bps) external {
         _checkOwnerOrRoles(ROLE_MANAGER);
 
         if (bps > MAX_BPS) revert InvalidBasisPoints();
 
-        _invites.defaultBps = bps;
+        _invites.bps = bps;
 
-        emit InviteLib.DefaultInviteBpsSet(bps);
+        emit InviteLib.InviteBpsSet(bps);
     }
 
     /**
-     * @notice Fetch the default invite basis points
-     * @return the default invite basis points
+     * @notice Fetch the invite basis points used for allocating reward shares
+     * @return the current invite basis points
      */
-    function defaultInviteBps() external view returns (uint16) {
-        return _invites.defaultBps;
+    function inviteBps() external view returns (uint16) {
+        return _invites.bps;
     }
 
     /**
-     * @notice Fetch the reward basis points for a given invite code
-     * @param code the unique integer code for the invite
-     * @return value the reward basis points and permanence
+     * @notice Fetch the current recipient address of a given inviter token id
+     * @param inviterId the inviter's subscription token ID
+     * @return address the inviter's address
      */
-    function inviteDetail(
-        uint256 code
-    ) external view returns (InviteLib.Code memory value) {
-        return _invites.codes[code];
+    function inviter(uint256 inviterId) external view returns (address) {
+        return _invites.inviters[inviterId];
     }
 
     ////////////////////////
@@ -513,27 +466,28 @@ contract STPV2 is
      * @param account the account to purchase the subscription for
      * @param tierId the tier id to purchase
      * @param numTokens the number of tokens to purchase
-     * @param inviteCode the invite code to use
+     * @param inviterId the inviter token id to use
      */
     function _purchase(
         address account,
         uint16 tierId,
         uint256 numTokens,
-        uint256 inviteCode
+        uint256 inviterId
     ) private nonReentrant {
         uint256 tokensIn = 0;
 
         Subscription storage sub = _state.subscriptions[account];
 
         // This ensures the original inviter gets the lifetime invite cut
-        // for subscriptions started with their code.
+        // for subscriptions started with their token id.
         if (
             // Check if subscription already exists
             sub.tokenId != 0
         ) {
-            // Revert if provided code isn't null and doesn't match existing subscription's code
-            if (inviteCode != 0 && inviteCode != sub.inviteCode) {
-                revert InviteLib.InvalidInviteCode();
+            // Revert if provided code isn't null and doesn't match existing
+            // subscription's inviter token id
+            if (inviterId != 0 && inviterId != sub.inviterId) {
+                revert InviteLib.InvalidInviterId();
             }
         }
 
@@ -543,14 +497,11 @@ contract STPV2 is
         // Mint a new token if necessary
         uint256 tokenId = sub.tokenId;
         if (tokenId == 0) {
-            tokenId = _state.mint(account, inviteCode);
+            tokenId = _state.mint(account, inviterId);
             _safeMint(account, tokenId);
 
-            // Set tokenId as the default invite code for the new subscriber
-            _invites.setInvite(
-                uint256(tokenId),
-                InviteLib.Code(_invites.defaultBps, false, account)
-            );
+            // Set tokenId as the default inviter token id for the new subscriber
+            _invites.setInviter(uint256(tokenId), account);
         }
         // Adding time to existing subscription
         else {
@@ -567,7 +518,7 @@ contract STPV2 is
         // Purchase the subscription (switching tiers if necessary)
         _state.purchase(account, tokensIn, tierId);
 
-        // Calculate client / inviter split if invite code isn't applicable
+        // Calculate client / inviter split if inviter token id isn't applicable
         uint16 clientBps = _feeParams.clientBps;
 
         // Transfer protocol + client fees
@@ -577,17 +528,25 @@ contract STPV2 is
             _feeParams.protocolRecipient
         ) + _transferFee(tokensIn, clientBps, _feeParams.clientRecipient));
 
-        InviteLib.Code memory inviteInfo = _invites.codes[sub.inviteCode];
-
-        // Ensure user can't accidentally use a non-existent invite code
-        if (sub.inviteCode > 0 && inviteInfo.basisPoints == 0)
-            revert InviteLib.NonExistantInviteCode();
-
         // Issue shares and allocate funds to reward pool
-        uint256 inviterTokens = (tokensIn * inviteInfo.basisPoints) / MAX_BPS;
+        uint256 inviterTokens = (tokensIn * _invites.bps) / MAX_BPS;
         uint256 subscriberTokens = tokensIn - inviterTokens;
 
-        _issueAndAllocateRewards(inviteInfo.inviter, inviterTokens);
+        address inviter_ = _invites.inviters[sub.inviterId];
+
+        if (inviter_ == address(0)) {
+            // Ensure user can't accidentally try to use a non-existent inviter id
+            if (sub.inviterId > 0) revert InviteLib.NonExistantInviter();
+
+            // If no inviter, the protocol gets the inviter's cut
+            _allocateRewardsForNullInviter(
+                _state.tiers[sub.tierId].params.rewardBasisPoints,
+                inviterTokens
+            );
+        } else {
+            _issueAndAllocateRewards(inviter_, inviterTokens);
+        }
+
         _issueAndAllocateRewards(account, subscriberTokens);
     }
 
@@ -627,6 +586,14 @@ contract STPV2 is
         // It's possible for 0 shares to be issued if the curve is not set, or the multipler is 0
         _rewards.issueSharesWithCurve(account, rewardTokens, curve);
         _rewards.allocateRewards(rewardTokens);
+    }
+
+    function _allocateRewardsForNullInviter(
+        uint16 rewardBps,
+        uint256 inviterTokens
+    ) internal {
+        _rewards.totalRewardIngress += (inviterTokens * rewardBps) / MAX_BPS;
+        emit RewardPoolLib.RewardsAllocated(inviterTokens);
     }
 
     ////////////////////////

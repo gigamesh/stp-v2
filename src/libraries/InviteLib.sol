@@ -4,28 +4,28 @@ pragma solidity 0.8.25;
 
 import "../types/Constants.sol";
 
-/// @dev Library for storing invite codes and their associated percentages
+/// @dev Library for storing inviter token ids and their associated percentages
 library InviteLib {
     error InviteLocked();
 
-    error InvalidInviteCode();
+    error InvalidInviterId();
 
-    error NonExistantInviteCode();
+    error NonExistantInviter();
 
     error InvalidInviter();
 
     error CodeAlreadyExists();
 
-    /// @dev A invite code was created or updated
-    event InviteSet(uint256 indexed code);
+    /// @dev A inviter was created or updated
+    event InviterSet(uint256 indexed inviterId, address inviter);
 
-    /// @dev A invite code was destroyed (set to 0)
+    /// @dev A inviter token id was destroyed (set to 0)
     event InviteDestroyed(uint256 indexed code);
 
     /// @dev The default invite BPS was set
-    event DefaultInviteBpsSet(uint16 bps);
+    event InviteBpsSet(uint16 bps);
 
-    /// @dev Struct for holding details of a invite code
+    /// @dev Struct for holding details of a inviter token id
     struct Code {
         /// @dev The percentage of the reward shares to give to the inviter
         uint16 basisPoints;
@@ -36,30 +36,21 @@ library InviteLib {
     }
 
     struct State {
-        /// @dev Referal code details
-        mapping(uint256 => Code) codes;
-        /// @dev The BPS set for the default invite code set for each subscription token
-        uint16 defaultBps;
+        /// @dev Inviter token ID to address mapping
+        mapping(uint256 => address) inviters;
+        /// @dev The BPS set for the default inviter token id set for each subscription token
+        uint16 bps;
     }
 
-    /// @dev Basic validation and storage for a invite code. A single call was used to reduce size
-    function setInvite(
+    /// @dev Set address of inviter
+    function setInviter(
         State storage state,
-        uint256 code,
-        Code memory settings
+        uint256 inviterId,
+        address inviter
     ) internal {
-        if (state.codes[code].permanent) revert InviteLocked();
-        if (settings.basisPoints == 0) {
-            delete state.codes[code];
-            emit InviteDestroyed(code);
-            return;
-        }
-        if (settings.basisPoints > MAX_REFERRAL_BPS)
-            revert InvalidBasisPoints();
+        if (inviter == address(0)) revert InvalidInviter();
 
-        if (settings.inviter == address(0)) revert InvalidInviter();
-
-        state.codes[code] = settings;
-        emit InviteSet(code);
+        state.inviters[inviterId] = inviter;
+        emit InviterSet(inviterId, inviter);
     }
 }

@@ -70,7 +70,7 @@ contract MintingTest is BaseTest {
             MintParams({
                 tierId: 1,
                 recipient: bob,
-                inviteCode: 0,
+                inviterId: 0,
                 purchaseValue: 0.001 ether
             })
         );
@@ -178,7 +178,7 @@ contract MintingTest is BaseTest {
             MintParams({
                 tierId: 2,
                 recipient: bob,
-                inviteCode: 0,
+                inviterId: 0,
                 purchaseValue: 0.001 ether
             })
         );
@@ -191,7 +191,7 @@ contract MintingTest is BaseTest {
             MintParams({
                 tierId: 1,
                 recipient: bob,
-                inviteCode: 0,
+                inviterId: 0,
                 purchaseValue: 0.001 ether
             })
         );
@@ -201,7 +201,7 @@ contract MintingTest is BaseTest {
             MintParams({
                 tierId: 2,
                 recipient: bob,
-                inviteCode: 0,
+                inviterId: 0,
                 purchaseValue: 0.001 ether
             })
         );
@@ -209,7 +209,7 @@ contract MintingTest is BaseTest {
             MintParams({
                 tierId: 0,
                 recipient: bob,
-                inviteCode: 0,
+                inviterId: 0,
                 purchaseValue: 0.001 ether
             })
         );
@@ -222,7 +222,7 @@ contract MintingTest is BaseTest {
             MintParams({
                 tierId: 1,
                 recipient: bob,
-                inviteCode: 0,
+                inviterId: 0,
                 purchaseValue: 0.001 ether
             })
         );
@@ -238,7 +238,7 @@ contract MintingTest is BaseTest {
             MintParams({
                 tierId: 2,
                 recipient: bob,
-                inviteCode: 0,
+                inviterId: 0,
                 purchaseValue: 0.001 ether
             })
         );

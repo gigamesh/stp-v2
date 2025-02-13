@@ -94,8 +94,8 @@ struct Subscription {
     uint48 expiresAt;
     /// @dev The tokenId for the subscription
     uint64 tokenId;
-    /// @dev The invite code used to create the subscription
-    uint256 inviteCode;
+    /// @dev The inviter token id used to create the subscription
+    uint256 inviterId;
 }
 
 /// @dev The advanced parameters for minting a subscription
@@ -104,8 +104,8 @@ struct MintParams {
     uint16 tierId;
     /// @dev The address of the recipient (token holder)
     address recipient;
-    /// @dev The invite code
-    uint256 inviteCode;
+    /// @dev The inviter token id
+    uint256 inviterId;
     /// @dev The number of tokens being transferred
     uint256 purchaseValue;
 }
